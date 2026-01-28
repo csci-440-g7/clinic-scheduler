@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "ms-python.python", // Essential Python support
+    "charliermarsh.ruff", // Fast linting/formatting for Django
+    "dbaeumer.vscode-eslint", // Linting for Vite/React
+    "esbenp.prettier-vscode", // Formatting for React/TypeScript
+    "ms-azuretools.vscode-docker", // Helpful if you containerize later
+    "tamasfe.even-better-toml" // Formatting for your pyproject.toml
+  ]
+}

@@ -1,0 +1,8 @@
+{
+    "scripts": {
+    "setup": "cd backend && uv sync && cd ../frontend && npm install",
+    "dev:back": "cd backend && uv run python manage.py runserver",
+    "dev:front": "cd frontend && npm run dev",
+    "dev": "npm run dev:back & npm run dev:front"
+    }
+}

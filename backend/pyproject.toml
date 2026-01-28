@@ -1,0 +1,22 @@
+[project]
+name = "clinic_scheduler_backend"
+version = "0.1.0"
+description = "Add your description here"
+readme = "../README.md"
+requires-python = ">=3.14"
+dependencies = [
+    "dj-rest-auth>=7.0.2",
+    "django>=5.2.10",
+    "django-allauth>=65.14.0",
+    "django-ninja>=1.5.3",
+    "django-q2>=1.9.0",
+    "psycopg2-binary>=2.9.11",
+    "ruff>=0.14.14",
+]
+[tool.ruff]
+line-length = 88
+target-version = "py314"
+
+[tool.ruff.lint]
+# E = pycodestyle, F = Pyflakes, I = isort (import sorting), UP = pyupgrade
+select = ["E", "F", "I", "UP"]

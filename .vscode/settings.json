@@ -1,0 +1,32 @@
+{
+  // Set Python interpreter path to the virtual environment
+  "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv",
+  
+  // Python & Ruff Configuration
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff",
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.fixAll.ruff": "explicit",
+      "source.organizeImports.ruff": "explicit"
+    }
+  },
+
+  // JavaScript / TypeScript / React Configuration
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[typescriptreact]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+
+  // Ensure consistent line endings across OSs (vital for Git)
+  "files.eol": "\n",
+  "files.insertFinalNewline": true
+}
