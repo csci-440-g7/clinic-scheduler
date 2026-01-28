@@ -14,17 +14,21 @@ East Texas A&amp;M CSCI-440 Group 7 capstone. Pain Management Clinic Scheduler.
 
 1. Clone the repository:
    git clone https://github.com/csci-440-g7/clinic-scheduler.git
+
+2. Open the git repo:
    cd pain-management-system
 
-   Set git user.name and user.email:
+3. Set git user.name:
    git config --local user.name "{YOUR NAME}"
+  
+4. Set the git user.email:
    git config --local user.email "{YOUR LEOMAIL USERNAME}@leomail.tamuc.edu"
 
-2. Install Project Manager:
+5. Install Project Manager:
    In the root directory, run:
    npm install
 
-3. Run Global Setup:
+6. Run Global Setup:
    This command will install all Python dependencies in the backend and Node modules in the frontend:
    npm run setup
 
