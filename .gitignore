@@ -1,15 +1,19 @@
-# Python / Backend
-backend/.venv/
-backend/__pycache__/
-backend/core/__pycache__/
-backend/*.pyc
-backend/db.sqlite3
-
-# Node / Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/.env
-
 # OS Specific
 .DS_Store
 Thumbs.db
+
+# Default ignored files
+/shelf/
+/workspace.xml
+# Rider ignored files
+/projectSettingsUpdater.xml
+/contentModel.xml
+/modules.xml
+/.idea.clinic-scheduler.iml
+# Ignored default folder with query files
+/queries/
+# Datasource local storage ignored files
+/dataSources/
+/dataSources.local.xml
+# Editor-based HTTP Client requests
+/httpRequests/
