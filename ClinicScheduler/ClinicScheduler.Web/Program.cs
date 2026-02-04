@@ -1,6 +1,7 @@
 using ClinicScheduler.Web.Components;
 using ClinicScheduler.Shared.Services;
 using ClinicScheduler.Web.Services;
+using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +13,7 @@ builder.Services.AddRazorComponents()
 // Add device-specific services used by the ClinicScheduler.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
 
+builder.Services.AddMudServices();
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
