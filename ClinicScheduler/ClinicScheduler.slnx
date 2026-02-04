@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="ClinicScheduler.Shared/ClinicScheduler.Shared.csproj" />
+  <Project Path="ClinicScheduler.Web.Client/ClinicScheduler.Web.Client.csproj" />
+  <Project Path="ClinicScheduler.Web/ClinicScheduler.Web.csproj" />
+  <Project Path="ClinicScheduler/ClinicScheduler.csproj" />
+</Solution>

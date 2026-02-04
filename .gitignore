@@ -8,6 +8,7 @@ obj/
 .idea/
 *.user
 *.suo
+.vscode/
 
 # OS files
 .DS_Store
