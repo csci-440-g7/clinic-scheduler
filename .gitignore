@@ -1,15 +1,15 @@
-# Python / Backend
-backend/.venv/
-backend/__pycache__/
-backend/core/__pycache__/
-backend/*.pyc
-backend/db.sqlite3
+# Build results
+[Dd]ebug/
+[Rr]elease/
+bin/
+obj/
 
-# Node / Frontend
-frontend/node_modules/
-frontend/dist/
-frontend/.env
+# IDE settings
+.idea/
+*.user
+*.suo
+.vscode/
 
-# OS Specific
+# OS files
 .DS_Store
 Thumbs.db
