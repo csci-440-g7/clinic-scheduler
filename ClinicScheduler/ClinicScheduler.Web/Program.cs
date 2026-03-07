@@ -1,9 +1,28 @@
 using ClinicScheduler.Web.Components;
 using ClinicScheduler.Shared.Services;
 using ClinicScheduler.Web.Services;
+using ClinicScheduler.Core.Interfaces;
+using ClinicScheduler.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Register the Database Context
+var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(defaultConnectionString))
+{
+    throw new InvalidOperationException(
+        "The connection string 'DefaultConnection' is missing or empty. Please configure a valid connection string in appsettings.json or environment configuration.");
+}
+builder.Services.AddDbContext<ClinicDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Register the repositories
+builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+
+// Add API Controllers
+builder.Services.AddControllers();
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -34,6 +53,9 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+
+// Map API endpoints
+app.MapControllers();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
