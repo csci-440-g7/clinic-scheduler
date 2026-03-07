@@ -23,7 +23,7 @@ public class PatientsController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<Patient>>> GetAll(CancellationToken ct)
         => Ok(await _repository.GetAllAsync(ct));
 
-    [HttpGet("id:int")]
+    [HttpGet("{id:int}")]
     public async Task<ActionResult<Patient>> GetById(int id, CancellationToken ct)
     {
         var patient = await _repository.GetByIdAsync(id, ct);

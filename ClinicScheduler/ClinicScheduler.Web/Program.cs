@@ -9,6 +9,12 @@ using MudBlazor.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 // Register the Database Context
+var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(defaultConnectionString))
+{
+    throw new InvalidOperationException(
+        "The connection string 'DefaultConnection' is missing or empty. Please configure a valid connection string in appsettings.json or environment configuration.");
+}
 builder.Services.AddDbContext<ClinicDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
