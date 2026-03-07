@@ -27,7 +27,7 @@ public class TherapyTypesController : ControllerBase
     }
 
     [HttpPost]
-    public async Task<ActionResult<TherapyType> Create(TherapyType therapyType, CancellationToken ct)
+    public async Task<ActionResult<TherapyType>> Create(TherapyType therapyType, CancellationToken ct)
     {
         var created = await _repository.AddAsync(therapyType, ct);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
