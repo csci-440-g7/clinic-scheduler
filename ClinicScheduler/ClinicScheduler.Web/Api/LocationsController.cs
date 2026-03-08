@@ -1,6 +1,6 @@
 using ClinicScheduler.Core.Entities;
 using ClinicScheduler.Core.Interfaces;
-
+using ClinicScheduler.Web.Contracts.Locations;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicScheduler.Web.Api;
@@ -17,37 +17,48 @@ public class LocationsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<Location>>> GetAll(CancellationToken ct)
-        => Ok(await _repository.GetAllAsync(ct));
+    public async Task<ActionResult<IReadOnlyList<LocationDto>>> GetAll(CancellationToken ct)
+    {
+        var locations = await _repository.GetAllAsync(ct);
+        return Ok(locations.Select(static x => MapToDto(x)).ToList());
+    }
 
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<Location>> GetById(int id, CancellationToken ct)
+    public async Task<ActionResult<LocationDto>> GetById(int id, CancellationToken ct)
     {
         var location = await _repository.GetByIdAsync(id, ct);
-        return location is null ? NotFound() : Ok(location);
+        return location is null ? NotFound() : Ok(MapToDto(location));
     }
 
     [HttpPost]
-    public async Task<ActionResult<Location>> Create(Location location, CancellationToken ct)
+    public async Task<ActionResult<LocationDto>> Create(CreateLocationRequest request, CancellationToken ct)
     {
+        var location = new Location
+        {
+            Name = request.Name,
+            Address = request.Address,
+            City = request.City,
+            State = request.State,
+            ZipCode = request.ZipCode,
+            TimeZone = request.TimeZone
+        };
+
         var created = await _repository.AddAsync(location, ct);
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
     }
 
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, Location location, CancellationToken ct)
+    public async Task<IActionResult> Update(int id, UpdateLocationRequest request, CancellationToken ct)
     {
-        if (id != location.Id) return BadRequest("ID mismatch.");
-
         var existing = await _repository.GetByIdAsync(id, ct);
         if (existing is null) return NotFound();
 
-        existing.Name = location.Name;
-        existing.Address = location.Address;
-        existing.City = location.City;
-        existing.State = location.State;
-        existing.ZipCode = location.ZipCode;
-        existing.TimeZone = location.TimeZone;
+        existing.Name = request.Name;
+        existing.Address = request.Address;
+        existing.City = request.City;
+        existing.State = request.State;
+        existing.ZipCode = request.ZipCode;
+        existing.TimeZone = request.TimeZone;
 
         await _repository.UpdateAsync(existing, ct);
         return NoContent();
@@ -62,4 +73,17 @@ public class LocationsController : ControllerBase
         await _repository.DeleteAsync(location, ct);
         return NoContent();
     }
+
+    private static LocationDto MapToDto(Location location) => new()
+    {
+        Id = location.Id,
+        Name = location.Name,
+        Address = location.Address,
+        City = location.City,
+        State = location.State,
+        ZipCode = location.ZipCode,
+        TimeZone = location.TimeZone,
+        CreatedAt = location.CreatedAt,
+        UpdatedAt = location.UpdatedAt
+    };
 }

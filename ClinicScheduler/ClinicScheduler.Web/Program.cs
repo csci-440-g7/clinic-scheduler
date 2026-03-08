@@ -1,9 +1,12 @@
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
 using ClinicScheduler.Web.Components;
 using ClinicScheduler.Shared.Services;
 using ClinicScheduler.Web.Services;
 using ClinicScheduler.Core.Interfaces;
 using ClinicScheduler.Infrastructure.Data;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,11 +26,39 @@ builder.Services.AddDbContext<ClinicDbContext>(options =>
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 
 // Add API Controllers
-builder.Services.AddControllers();
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
 
-builder.Services.AddOpenApi();
+builder.Services.AddOpenApi(options =>
+{
+    options.AddSchemaTransformer((schema, context, CancellationToken) =>
+    {
+        if (context.JsonTypeInfo.Type.IsEnum)
+        {
+            schema.Type = JsonSchemaType.String;
+            schema.Enum = context.JsonTypeInfo.Type
+                .GetEnumNames()
+                .Select(name => JsonValue.Create(name))
+                .Cast<JsonNode>()
+                .ToArray();
+        }
 
-builder.Services.AddSwaggerGen();
+        return Task.CompletedTask;
+    });
+    options.AddDocumentTransformer((document, AppContext, CancellationToken) =>
+    {
+        document.Info = new OpenApiInfo
+        {
+            Title = "Clinic Scheduler API",
+            Version = "v1"
+        };
+        
+        return Task.CompletedTask;
+    });
+});
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -47,7 +78,6 @@ if (app.Environment.IsDevelopment())
 
     app.MapOpenApi();
 
-    app.UseSwagger();
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/openapi/v1.json", "ClinicScheduler API v1");

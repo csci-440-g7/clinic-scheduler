@@ -1,5 +1,6 @@
 using ClinicScheduler.Core.Entities;
 using ClinicScheduler.Infrastructure.Data;
+using ClinicScheduler.Web.Contracts.Appointments;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,7 +18,7 @@ public class AppointmentsController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<Appointment>>> GetAll(CancellationToken ct)
+    public async Task<ActionResult<IReadOnlyList<AppointmentDto>>> GetAll(CancellationToken ct)
     {
         var appointments = await _dbContext.Appointments
             .AsNoTracking()
@@ -28,11 +29,11 @@ public class AppointmentsController : ControllerBase
             .OrderBy(x => x.StartTime)
             .ToListAsync(ct);
 
-        return Ok(appointments);
+        return Ok(appointments.Select(static x => MapToDto(x)).ToList());
     }
-    
+
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<Appointment>> GetById(int id, CancellationToken ct)
+    public async Task<ActionResult<AppointmentDto>> GetById(int id, CancellationToken ct)
     {
         var appointment = await _dbContext.Appointments
             .AsNoTracking()
@@ -42,21 +43,32 @@ public class AppointmentsController : ControllerBase
             .Include(x => x.TreatmentPlan)
             .FirstOrDefaultAsync(x => x.Id == id, ct);
 
-        return appointment is null ? NotFound() : Ok(appointment);
+        return appointment is null ? NotFound() : Ok(MapToDto(appointment));
     }
 
     [HttpPost]
-    public async Task<ActionResult<Appointment>> Create(Appointment appointment, CancellationToken ct)
+    public async Task<ActionResult<AppointmentDto>> Create(CreateAppointmentRequest request, CancellationToken ct)
     {
+        var appointment = new Appointment
+        {
+            PatientId = request.PatientId,
+            TherapistId = request.TherapistId,
+            RoomId = request.RoomId,
+            TreatmentPlanId = request.TreatmentPlanId,
+            StartTime = request.StartTime,
+            EndTime = request.EndTime,
+            Notes = request.Notes,
+            Status = AppointmentStatus.Scheduled,
+            HasConflict = false,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
         var validationResult = await ValidateAppointmentAsync(appointment, ct);
         if (validationResult is not null)
         {
             return validationResult;
         }
-
-        appointment.Id = 0;
-        appointment.CreatedAt = DateTime.UtcNow;
-        appointment.UpdatedAt = DateTime.UtcNow;
 
         _dbContext.Appointments.Add(appointment);
         await _dbContext.SaveChangesAsync(ct);
@@ -69,38 +81,46 @@ public class AppointmentsController : ControllerBase
             .Include(x => x.TreatmentPlan)
             .FirstAsync(x => x.Id == appointment.Id, ct);
 
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
     }
 
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, Appointment appointment, CancellationToken ct)
+    public async Task<IActionResult> Update(int id, UpdateAppointmentRequest request, CancellationToken ct)
     {
-        if (id != appointment.Id)
-        {
-            return BadRequest("ID mismatch.");
-        }
-
         var existing = await _dbContext.Appointments.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (existing is null)
         {
             return NotFound();
         }
 
-        var validationResult = await ValidateAppointmentAsync(appointment, ct, excludeAppointmentId: id);
+        var candidate = new Appointment
+        {
+            Id = id,
+            PatientId = request.PatientId,
+            TherapistId = request.TherapistId,
+            RoomId = request.RoomId,
+            TreatmentPlanId = request.TreatmentPlanId,
+            StartTime = request.StartTime,
+            EndTime = request.EndTime,
+            Status = request.Status,
+            Notes = request.Notes
+        };
+
+        var validationResult = await ValidateAppointmentAsync(candidate, ct, excludeAppointmentId: id);
         if (validationResult is not null)
         {
             return validationResult;
         }
 
-        existing.PatientId = appointment.PatientId;
-        existing.TherapistId = appointment.TherapistId;
-        existing.RoomId = appointment.RoomId;
-        existing.TreatmentPlanId = appointment.TreatmentPlanId;
-        existing.StartTime = appointment.StartTime;
-        existing.EndTime = appointment.EndTime;
-        existing.Status = appointment.Status;
-        existing.HasConflict = appointment.HasConflict;
-        existing.Notes = appointment.Notes;
+        existing.PatientId = request.PatientId;
+        existing.TherapistId = request.TherapistId;
+        existing.RoomId = request.RoomId;
+        existing.TreatmentPlanId = request.TreatmentPlanId;
+        existing.StartTime = request.StartTime;
+        existing.EndTime = request.EndTime;
+        existing.Status = request.Status;
+        existing.Notes = request.Notes;
+        existing.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(ct);
         return NoContent();
@@ -120,6 +140,25 @@ public class AppointmentsController : ControllerBase
 
         return NoContent();
     }
+
+    private static AppointmentDto MapToDto(Appointment appointment) => new()
+    {
+        Id = appointment.Id,
+        PatientId = appointment.PatientId,
+        PatientName = $"{appointment.Patient.FirstName} {appointment.Patient.LastName}".Trim(),
+        TherapistId = appointment.TherapistId,
+        TherapistName = $"{appointment.Therapist.FirstName} {appointment.Therapist.LastName}".Trim(),
+        RoomId = appointment.RoomId,
+        RoomName = appointment.Room.Name,
+        TreatmentPlanId = appointment.TreatmentPlanId,
+        StartTime = appointment.StartTime,
+        EndTime = appointment.EndTime,
+        Status = appointment.Status,
+        HasConflict = appointment.HasConflict,
+        Notes = appointment.Notes,
+        CreatedAt = appointment.CreatedAt,
+        UpdatedAt = appointment.UpdatedAt
+    };
 
     private async Task<ActionResult?> ValidateAppointmentAsync(
         Appointment appointment,
