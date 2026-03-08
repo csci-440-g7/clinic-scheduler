@@ -5,7 +5,7 @@ namespace ClinicScheduler.Web.Contracts.Therapists;
 /// <summary>
 /// Request model for creating a new therapist in the clinic system.
 /// </summary>
-public sealed class CreatedTherapistRequest
+public sealed class CreateTherapistRequest
 {
     /// <summary>
     /// The therapist's first name.
