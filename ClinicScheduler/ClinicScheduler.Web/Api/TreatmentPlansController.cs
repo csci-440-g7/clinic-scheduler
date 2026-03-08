@@ -1,5 +1,6 @@
 using ClinicScheduler.Core.Entities;
 using ClinicScheduler.Infrastructure.Data;
+using ClinicScheduler.Web.Contracts.TreatmentPlans;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,7 +21,7 @@ public class TreatmentPlansController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<ActionResult<IReadOnlyList<TreatmentPlan>>> GetAll(CancellationToken ct)
+    public async Task<ActionResult<IReadOnlyList<TreatmentPlanDto>>> GetAll(CancellationToken ct)
     {
         var plans = await _dbContext.TreatmentPlans
             .AsNoTracking()
@@ -31,11 +32,11 @@ public class TreatmentPlansController : ControllerBase
             .OrderByDescending(x => x.CreatedAt)
             .ToListAsync(ct);
 
-        return Ok(plans);
+        return Ok(plans.Select(static x => MapToDto(x)).ToList());
     }
 
     [HttpGet("{id:int}")]
-    public async Task<ActionResult<TreatmentPlan>> GetById(int id, CancellationToken ct)
+    public async Task<ActionResult<TreatmentPlanDto>> GetById(int id, CancellationToken ct)
     {
         var plan = await _dbContext.TreatmentPlans
             .AsNoTracking()
@@ -45,36 +46,44 @@ public class TreatmentPlansController : ControllerBase
                 .ThenInclude(x => x.TherapyType)
             .FirstOrDefaultAsync(x => x.Id == id, ct);
 
-        return plan is null ? NotFound() : Ok(plan);
+        return plan is null ? NotFound() : Ok(MapToDto(plan));
     }
 
     [HttpPost]
-    public async Task<ActionResult<TreatmentPlan>> Create(TreatmentPlan treatmentPlan, CancellationToken ct)
+    public async Task<ActionResult<TreatmentPlanDto>> Create(CreateTreatmentPlanRequest request, CancellationToken ct)
     {
-        var validationResult = await ValidateTreatmentPlanAsync(treatmentPlan, ct);
+        var normalizedTherapyTypeIds = request.TherapyTypeIds.Distinct().ToList();
+        DateOnly? endDate = request.EndDate.HasValue ? DateOnly.FromDateTime(request.EndDate.Value) : null;
+
+        var validationResult = await ValidateTreatmentPlanAsync(
+            request.PatientId,
+            request.TherapistId,
+            request.FrequencyPerWeek,
+            request.TotalDays,
+            request.StartDate,
+            endDate,
+            normalizedTherapyTypeIds,
+            ct);
+
         if (validationResult is not null)
         {
             return validationResult;
         }
 
-        treatmentPlan.Id = 0;
-        treatmentPlan.CreatedAt = DateTime.UtcNow;
-        treatmentPlan.UpdatedAt = DateTime.UtcNow;
-
-        var requestedTherapyTypeIds = treatmentPlan.TreatmentPlanTherapies
-            .Select(x => x.TherapyTypeId)
-            .Distinct()
-            .ToList();
-
-        treatmentPlan.TreatmentPlanTherapies.Clear();
-
-        foreach (var therapyTypeId in requestedTherapyTypeIds)
+        var treatmentPlan = new TreatmentPlan
         {
-            treatmentPlan.TreatmentPlanTherapies.Add(new TreatmentPlanTherapy
-            {
-                TherapyTypeId = therapyTypeId
-            });
-        }
+            PatientId = request.PatientId,
+            TherapistId = request.TherapistId,
+            FrequencyPerWeek = request.FrequencyPerWeek,
+            TotalDays = request.TotalDays,
+            StartDate = request.StartDate,
+            EndDate = endDate,
+            CreatedAt = DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow,
+            TreatmentPlanTherapies = normalizedTherapyTypeIds
+                .Select(therapyTypeId => new TreatmentPlanTherapy { TherapyTypeId = therapyTypeId })
+                .ToList()
+        };
 
         _dbContext.TreatmentPlans.Add(treatmentPlan);
         await _dbContext.SaveChangesAsync(ct);
@@ -87,17 +96,12 @@ public class TreatmentPlansController : ControllerBase
                 .ThenInclude(x => x.TherapyType)
             .FirstAsync(x => x.Id == treatmentPlan.Id, ct);
 
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);
+        return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
     }
 
     [HttpPut("{id:int}")]
-    public async Task<IActionResult> Update(int id, TreatmentPlan treatmentPlan, CancellationToken ct)
+    public async Task<IActionResult> Update(int id, UpdateTreatmentPlanRequest request, CancellationToken ct)
     {
-        if (id != treatmentPlan.Id)
-        {
-            return BadRequest("ID mismatch.");
-        }
-
         var existing = await _dbContext.TreatmentPlans
             .Include(x => x.TreatmentPlanTherapies)
             .FirstOrDefaultAsync(x => x.Id == id, ct);
@@ -107,28 +111,33 @@ public class TreatmentPlansController : ControllerBase
             return NotFound();
         }
 
-        var validationResult = await ValidateTreatmentPlanAsync(treatmentPlan, ct);
+        var normalizedTherapyTypeIds = request.TherapyTypeIds.Distinct().ToList();
+
+        var validationResult = await ValidateTreatmentPlanAsync(
+            request.PatientId,
+            request.TherapistId,
+            request.FrequencyPerWeek,
+            request.TotalDays,
+            request.StartDate,
+            request.EndDate,
+            normalizedTherapyTypeIds,
+            ct);
+
         if (validationResult is not null)
         {
             return validationResult;
         }
 
-        existing.PatientId = treatmentPlan.PatientId;
-        existing.TherapistId = treatmentPlan.TherapistId;
-        existing.FrequencyPerWeek = treatmentPlan.FrequencyPerWeek;
-        existing.TotalDays = treatmentPlan.TotalDays;
-        existing.StartDate = treatmentPlan.StartDate;
-        existing.EndDate = treatmentPlan.EndDate;
+        existing.PatientId = request.PatientId;
+        existing.TherapistId = request.TherapistId;
+        existing.FrequencyPerWeek = request.FrequencyPerWeek;
+        existing.TotalDays = request.TotalDays;
+        existing.StartDate = request.StartDate;
+        existing.EndDate = request.EndDate;
         existing.UpdatedAt = DateTime.UtcNow;
 
         _dbContext.TreatmentPlanTherapies.RemoveRange(existing.TreatmentPlanTherapies);
-
-        var requestedTherapyTypeIds = treatmentPlan.TreatmentPlanTherapies
-            .Select(x => x.TherapyTypeId)
-            .Distinct()
-            .ToList();
-
-        foreach (var therapyTypeId in requestedTherapyTypeIds)
+        foreach (var therapyTypeId in normalizedTherapyTypeIds)
         {
             existing.TreatmentPlanTherapies.Add(new TreatmentPlanTherapy
             {
@@ -160,39 +169,70 @@ public class TreatmentPlansController : ControllerBase
         return NoContent();
     }
 
-    private async Task<ActionResult?> ValidateTreatmentPlanAsync(TreatmentPlan treatmentPlan, CancellationToken ct)
+    private static TreatmentPlanDto MapToDto(TreatmentPlan treatmentPlan) => new()
     {
-        if (!AllowedFrequencies.Contains(treatmentPlan.FrequencyPerWeek))
+        Id = treatmentPlan.Id,
+        PatientId = treatmentPlan.PatientId,
+        PatientName = $"{treatmentPlan.Patient.FirstName} {treatmentPlan.Patient.LastName}".Trim(),
+        TherapistId = treatmentPlan.TherapistId,
+        TherapistName = $"{treatmentPlan.Therapist.FirstName} {treatmentPlan.Therapist.LastName}".Trim(),
+        FrequencyPerWeek = treatmentPlan.FrequencyPerWeek,
+        TotalDays = treatmentPlan.TotalDays,
+        StartDate = treatmentPlan.StartDate,
+        EndDate = treatmentPlan.EndDate.HasValue
+            ? DateTime.SpecifyKind(treatmentPlan.EndDate.Value.ToDateTime(TimeOnly.MinValue), DateTimeKind.Utc)
+            : null,
+        Therapies = treatmentPlan.TreatmentPlanTherapies
+            .OrderBy(x => x.TherapyTypeId)
+            .Select(x => new TreatmentPlanTherapyDto
+            {
+                TherapyTypeId = x.TherapyTypeId,
+                TherapyTypeName = x.TherapyType.Name,
+                Specialty = x.TherapyType.Specialty,
+                ColorCode = x.TherapyType.ColorCode
+            })
+            .ToList(),
+        CreatedAt = treatmentPlan.CreatedAt,
+        UpdatedAt = treatmentPlan.UpdatedAt
+    };
+
+    private async Task<ActionResult?> ValidateTreatmentPlanAsync(
+        int patientId,
+        int therapistId,
+        int frequencyPerWeek,
+        int totalDays,
+        DateOnly startDate,
+        DateOnly? endDate,
+        IReadOnlyCollection<int> therapyTypeIds,
+        CancellationToken ct)
+    {
+        if (!AllowedFrequencies.Contains(frequencyPerWeek))
         {
             return BadRequest("FrequencyPerWeek must be 2, 3, or 4.");
         }
 
-        if (!AllowedTotalDays.Contains(treatmentPlan.TotalDays))
+        if (!AllowedTotalDays.Contains(totalDays))
         {
             return BadRequest("TotalDays must be 20, 30, or 50.");
         }
 
-        if (treatmentPlan.EndDate.HasValue && treatmentPlan.EndDate.Value < treatmentPlan.StartDate)
+        if (endDate.HasValue && endDate.Value < startDate)
         {
             return BadRequest("EndDate cannot be earlier than StartDate.");
         }
 
-        var patientExists = await _dbContext.Patients.AnyAsync(x => x.Id == treatmentPlan.PatientId, ct);
+        var patientExists = await _dbContext.Patients.AnyAsync(x => x.Id == patientId, ct);
         if (!patientExists)
         {
             return BadRequest("Invalid PatientId.");
         }
 
-        var therapistExists = await _dbContext.Therapists.AnyAsync(x => x.Id == treatmentPlan.TherapistId, ct);
+        var therapistExists = await _dbContext.Therapists.AnyAsync(x => x.Id == therapistId, ct);
         if (!therapistExists)
         {
             return BadRequest("Invalid TherapistId.");
         }
 
-        var therapyTypeIds = treatmentPlan.TreatmentPlanTherapies
-            .Select(x => x.TherapyTypeId)
-            .Distinct()
-            .ToList();
 
         if (therapyTypeIds.Count == 0)
         {
