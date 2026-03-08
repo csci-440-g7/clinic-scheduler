@@ -20,6 +20,7 @@ public sealed class UpdateRoomRequest
     /// Maximum number of occupants the room supports.
     /// </summary>
     /// <example>4</example>
+    [Range(1, int.MaxValue)]
     public int Capacity { get; init; }
     
     /// <summary>
