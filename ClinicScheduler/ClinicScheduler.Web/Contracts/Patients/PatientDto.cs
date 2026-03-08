@@ -33,6 +33,7 @@ public sealed class PatientDto
     /// The patient's phone number.
     /// </summary>
     /// <example>555-123-4567</example>
+    /// <example>+1-555-123-4567</example>
     public string? Phone { get; init; }
     
     /// <summary>

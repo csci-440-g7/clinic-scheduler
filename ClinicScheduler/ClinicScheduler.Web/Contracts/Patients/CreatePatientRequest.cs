@@ -36,6 +36,7 @@ public sealed class CreatePatientRequest
     /// The patient's phone number (optional).
     /// </summary>
     /// <example>555-123-4567</example>
+    /// <example>+1-555-123-4567</example>
     [Phone]
     [StringLength(25)]
     public string? Phone { get; init; }
