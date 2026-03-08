@@ -11,7 +11,6 @@ public sealed class UpdateTherapistRequest
     /// The therapist's updated first name.
     /// </summary>
     /// <example>John</example>
-    [Required]
     [StringLength(100)]
     public string FirstName { get; init; } = string.Empty;
     
@@ -19,7 +18,6 @@ public sealed class UpdateTherapistRequest
     /// The therapist's updated last name.
     /// </summary>
     /// <example>Doe</example>
-    [Required]
     [StringLength(100)]
     public string LastName { get; init; } = string.Empty;
 
@@ -27,7 +25,6 @@ public sealed class UpdateTherapistRequest
     /// The therapist's updated email address.
     /// </summary>
     /// <example>john.doe@example.com</example>
-    [Required]
     [EmailAddress]
     [StringLength(255)]
     public string Email { get; init; } = string.Empty;

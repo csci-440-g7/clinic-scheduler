@@ -34,7 +34,7 @@ public sealed class UpdateLocationRequest
     /// The updated state or province where the location is situated (optional).
     /// </summary>
     /// <example>TX</example>
-    [StringLength(100)]
+    [StringLength(3)]
     public string? State { get; init; }
 
     /// <summary>
