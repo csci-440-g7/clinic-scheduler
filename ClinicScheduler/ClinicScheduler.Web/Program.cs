@@ -64,6 +64,7 @@ builder.Services.AddOpenApi(options =>
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddInteractiveWebAssemblyComponents();
+builder.Services.AddControllers();
 
 // Add device-specific services used by the ClinicScheduler.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
@@ -98,7 +99,6 @@ app.UseAntiforgery();
 
 app.MapStaticAssets();
 
-// Map API endpoints
 app.MapControllers();
 
 app.MapRazorComponents<App>()

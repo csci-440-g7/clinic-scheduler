@@ -6,62 +6,32 @@ East Texas A&amp;M CSCI-440 Group 7 capstone. Pain Management Clinic Scheduler.
 
 ## Prerequisites
 
-- Install Python (3.12 or higher)
-- Install Node.js (v20 or higher)
-- Install uv: `curl -LsSf https://astral.sh/uv/install.sh | sh` (macOS/Linux) or `powershell -c "irm https://astral.sh/uv/install.ps1 | iex"` (Windows)
+- Install .NET 9.0 SDK (or higher)
+- Install Visual Studio 2022 (v17.12+) with the following workloads:
+  - .NET Multi-platform App UI development
+  - ASP.NET and web development
 
-## Initial Installation
+## Project Structure
 
-1. Clone the repository:
-   git clone https://github.com/csci-440-g7/clinic-scheduler.git
+The solution consists of the following projects:
 
-2. Open the git repo:
-   cd pain-management-system
-
-3. Set git user.name:
-   git config --local user.name "{YOUR NAME}"
-  
-4. Set the git user.email:
-   git config --local user.email "{YOUR LEOMAIL USERNAME}@leomail.tamuc.edu"
-
-5. Install Project Manager:
-   In the root directory, run:
-   npm install
-
-6. Run Global Setup:
-   This command will install all Python dependencies in the backend and Node modules in the frontend:
-   npm run setup
-
-## Recommended Extensions (VS Code)
-
-When you open this project in VS Code, you should see a notification to install "Recommended Extensions." Please install them. They include:
-
-- Ruff (Python Linter/Formatter)
-- Prettier (Frontend Formatter)
-- Python (Microsoft)
-- ESLint
+- **ClinicScheduler**: The .NET MAUI Blazor Hybrid application (Windows, Android, iOS, macOS).
+- **ClinicScheduler.Web**: The Blazor Web application (Server/Client).
+- **ClinicScheduler.Shared**: Shared Razor Class Library (UI and Services).
+- **ClinicScheduler.Core**: Core business logic and entities.
 
 ## Local Development
 
-To run both the Django backend and the Vite/React frontend simultaneously:
-npm run dev
+1. Clone the repository.
+2. Open `ClinicScheduler.sln` in Visual Studio.
 
-The servers will be available at:
+### Running the MAUI App
 
-- Backend API: http://localhost:8000
-- API Documentation (Swagger): http://localhost:8000/api/docs
-- Frontend: http://localhost:5173
+1. Set `ClinicScheduler` as the Startup Project.
+2. Select the target framework (e.g., Windows Machine).
+3. Press F5 to run.
 
-## Backend Manual Commands
+### Running the Web App
 
-If you need to run backend commands specifically (ensure you are in the /backend folder):
-
-- Sync environment: `uv sync`
-- Create migrations: `uv run python manage.py makemigrations`
-- Apply migrations: `uv run python manage.py migrate`
-- Create superuser: `uv run python manage.py createsuperuser`
-
-## Workflow Guidelines
-
-- Code Formatting: Formatting is handled automatically on save via Ruff (Python) and Prettier (JS/TS).
-- Git: Never commit the `backend/.venv` or `frontend/node_modules` folders. Ensure your local `uv.lock` and `package-lock.json` files are included in your pull requests.
+1. Set `ClinicScheduler.Web` as the Startup Project.
+2. Press F5 to run.
