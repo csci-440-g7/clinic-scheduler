@@ -9,6 +9,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddInteractiveWebAssemblyComponents();
+builder.Services.AddControllers();
 
 // Add device-specific services used by the ClinicScheduler.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
@@ -34,6 +35,8 @@ app.UseHttpsRedirection();
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+
+app.MapControllers();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
