@@ -76,6 +76,13 @@ builder.Services.AddSingleton<IFormFactor, FormFactor>();
 builder.Services.AddMudServices();
 var app = builder.Build();
 
+// Auto-apply EF migrations on startup (safe to run repeatedly; no-ops when up-to-date)
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
+    db.Database.Migrate();
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -97,7 +104,10 @@ else
 }
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+
+// HTTPS termination is handled by the load balancer in production; skip redirect in container
+if (!app.Environment.IsProduction())
+    app.UseHttpsRedirection();
 
 app.UseAntiforgery();
 

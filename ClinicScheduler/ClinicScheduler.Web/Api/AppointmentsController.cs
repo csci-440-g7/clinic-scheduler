@@ -1,4 +1,5 @@
 using ClinicScheduler.Core.Entities;
+using ClinicScheduler.Core.Services;
 using ClinicScheduler.Infrastructure.Data;
 using ClinicScheduler.Web.Contracts.Appointments;
 using Microsoft.AspNetCore.Mvc;
@@ -11,10 +12,12 @@ namespace ClinicScheduler.Web.Api;
 public class AppointmentsController : ControllerBase
 {
     private readonly ClinicDbContext _dbContext;
+    private readonly AppointmentSchedulingService _schedulingService;
 
-    public AppointmentsController(ClinicDbContext dbContext)
+    public AppointmentsController(ClinicDbContext dbContext, AppointmentSchedulingService schedulingService)
     {
         _dbContext = dbContext;
+        _schedulingService = schedulingService;
     }
 
     [HttpGet]
@@ -25,7 +28,6 @@ public class AppointmentsController : ControllerBase
             .Include(x => x.Patient)
             .Include(x => x.Therapist)
             .Include(x => x.Room)
-            .Include(x => x.TreatmentPlan)
             .OrderBy(x => x.StartTime)
             .ToListAsync(ct);
 
@@ -40,7 +42,6 @@ public class AppointmentsController : ControllerBase
             .Include(x => x.Patient)
             .Include(x => x.Therapist)
             .Include(x => x.Room)
-            .Include(x => x.TreatmentPlan)
             .FirstOrDefaultAsync(x => x.Id == id, ct);
 
         return appointment is null ? NotFound() : Ok(MapToDto(appointment));
@@ -49,78 +50,77 @@ public class AppointmentsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<AppointmentDto>> Create(CreateAppointmentRequest request, CancellationToken ct)
     {
-        var appointment = new Appointment
-        {
-            PatientId = request.PatientId,
-            TherapistId = request.TherapistId,
-            RoomId = request.RoomId,
-            TreatmentPlanId = request.TreatmentPlanId,
-            StartTime = request.StartTime,
-            EndTime = request.EndTime,
-            Notes = request.Notes,
-            Status = AppointmentStatus.Scheduled,
-            HasConflict = false,
-            CreatedAt = DateTime.UtcNow,
-            UpdatedAt = DateTime.UtcNow
-        };
+        if (request.EndTime <= request.StartTime)
+            return BadRequest("EndTime must be later than StartTime.");
 
-        var validationResult = await ValidateAppointmentAsync(appointment, ct);
-        if (validationResult is not null)
+        var duration = request.EndTime - request.StartTime;
+
+        try
         {
-            return validationResult;
+            var appointment = await _schedulingService.CreateAppointmentAsync(
+                request.PatientId,
+                request.TherapistId,
+                request.RoomId,
+                request.StartTime,
+                duration,
+                ct);
+
+            appointment.TreatmentPlanId = request.TreatmentPlanId;
+            appointment.Notes = request.Notes;
+            await _dbContext.SaveChangesAsync(ct);
+
+            var created = await _dbContext.Appointments
+                .AsNoTracking()
+                .Include(x => x.Patient)
+                .Include(x => x.Therapist)
+                .Include(x => x.Room)
+                .FirstAsync(x => x.Id == appointment.Id, ct);
+
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
         }
-
-        _dbContext.Appointments.Add(appointment);
-        await _dbContext.SaveChangesAsync(ct);
-
-        var created = await _dbContext.Appointments
-            .AsNoTracking()
-            .Include(x => x.Patient)
-            .Include(x => x.Therapist)
-            .Include(x => x.Room)
-            .Include(x => x.TreatmentPlan)
-            .FirstAsync(x => x.Id == appointment.Id, ct);
-
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new ProblemDetails { Detail = ex.Message });
+        }
     }
 
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, UpdateAppointmentRequest request, CancellationToken ct)
     {
         var existing = await _dbContext.Appointments.FirstOrDefaultAsync(x => x.Id == id, ct);
-        if (existing is null)
+        if (existing is null) return NotFound();
+
+        try
         {
-            return NotFound();
+            // Reschedule if start time changed (preserves duration, sets status to Rescheduled)
+            if (existing.StartTime != request.StartTime)
+                existing.Reschedule(request.StartTime);
+
+            // Apply explicit status transitions
+            switch (request.Status)
+            {
+                case AppointmentStatus.Canceled when existing.Status != AppointmentStatus.Canceled:
+                    existing.Cancel();
+                    break;
+                case AppointmentStatus.Completed when existing.Status != AppointmentStatus.Completed:
+                    existing.Complete();
+                    break;
+                case AppointmentStatus.Missed when existing.Status != AppointmentStatus.Missed:
+                    existing.MarkAsMissed();
+                    break;
+            }
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new ProblemDetails { Detail = ex.Message });
         }
 
-        var candidate = new Appointment
-        {
-            Id = id,
-            PatientId = request.PatientId,
-            TherapistId = request.TherapistId,
-            RoomId = request.RoomId,
-            TreatmentPlanId = request.TreatmentPlanId,
-            StartTime = request.StartTime,
-            EndTime = request.EndTime,
-            Status = request.Status,
-            Notes = request.Notes
-        };
-
-        var validationResult = await ValidateAppointmentAsync(candidate, ct, excludeAppointmentId: id);
-        if (validationResult is not null)
-        {
-            return validationResult;
-        }
-
-        existing.PatientId = request.PatientId;
-        existing.TherapistId = request.TherapistId;
-        existing.RoomId = request.RoomId;
         existing.TreatmentPlanId = request.TreatmentPlanId;
-        existing.StartTime = request.StartTime;
-        existing.EndTime = request.EndTime;
-        existing.Status = request.Status;
         existing.Notes = request.Notes;
-        existing.UpdatedAt = DateTime.UtcNow;
 
         await _dbContext.SaveChangesAsync(ct);
         return NoContent();
@@ -130,14 +130,10 @@ public class AppointmentsController : ControllerBase
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         var appointment = await _dbContext.Appointments.FirstOrDefaultAsync(x => x.Id == id, ct);
-        if (appointment is null)
-        {
-            return NotFound();
-        }
+        if (appointment is null) return NotFound();
 
         _dbContext.Appointments.Remove(appointment);
         await _dbContext.SaveChangesAsync(ct);
-
         return NoContent();
     }
 
@@ -145,9 +141,9 @@ public class AppointmentsController : ControllerBase
     {
         Id = appointment.Id,
         PatientId = appointment.PatientId,
-        PatientName = $"{appointment.Patient.FirstName} {appointment.Patient.LastName}".Trim(),
+        PatientName = appointment.Patient.FullName,
         TherapistId = appointment.TherapistId,
-        TherapistName = $"{appointment.Therapist.FirstName} {appointment.Therapist.LastName}".Trim(),
+        TherapistName = appointment.Therapist.FullName,
         RoomId = appointment.RoomId,
         RoomName = appointment.Room.Name,
         TreatmentPlanId = appointment.TreatmentPlanId,
@@ -159,68 +155,4 @@ public class AppointmentsController : ControllerBase
         CreatedAt = appointment.CreatedAt,
         UpdatedAt = appointment.UpdatedAt
     };
-
-    private async Task<ActionResult?> ValidateAppointmentAsync(
-        Appointment appointment,
-        CancellationToken ct,
-        int? excludeAppointmentId = null)
-    {
-        if (appointment.EndTime <= appointment.StartTime)
-        {
-            return BadRequest("EndTime must be later than StartTime.");
-        }
-
-        var patientExists = await _dbContext.Patients.AnyAsync(x => x.Id == appointment.PatientId, ct);
-        if (!patientExists)
-        {
-            return BadRequest("Invalid PatientId.");
-        }
-
-        var therapistExists = await _dbContext.Therapists.AnyAsync(x => x.Id == appointment.TherapistId, ct);
-        if (!therapistExists)
-        {
-            return BadRequest("Invalid TherapistId.");
-        }
-
-        var roomExists = await _dbContext.Rooms.AnyAsync(x => x.Id == appointment.RoomId, ct);
-        if (!roomExists)
-        {
-            return BadRequest("Invalid RoomId.");
-        }
-
-        if (appointment.TreatmentPlanId.HasValue)
-        {
-            var treatmentPlanExists = await _dbContext.TreatmentPlans
-                .AnyAsync(x => x.Id == appointment.TreatmentPlanId.Value, ct);
-
-            if (!treatmentPlanExists)
-            {
-                return BadRequest("Invalid TreatmentPlanId.");
-            }
-        }
-
-        var therapistConflict = await _dbContext.Appointments.AnyAsync(x =>
-            x.Id != excludeAppointmentId &&
-            x.TherapistId == appointment.TherapistId &&
-            appointment.StartTime < x.EndTime &&
-            appointment.EndTime > x.StartTime, ct);
-
-        if (therapistConflict)
-        {
-            return BadRequest("Therapist already has an appointment during that time.");
-        }
-
-        var roomConflict = await _dbContext.Appointments.AnyAsync(x =>
-            x.Id != excludeAppointmentId &&
-            x.RoomId == appointment.RoomId &&
-            appointment.StartTime < x.EndTime &&
-            appointment.EndTime > x.StartTime, ct);
-
-        if (roomConflict)
-        {
-            return BadRequest("Room already has an appointment during that time.");
-        }
-
-        return null;
-    }
 }

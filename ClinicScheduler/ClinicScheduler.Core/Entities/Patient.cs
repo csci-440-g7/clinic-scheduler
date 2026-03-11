@@ -46,4 +46,12 @@ public class Patient
         Phone = phone;
         UpdatedAt = DateTime.UtcNow;
     }
+
+    public void UpdateDetails(string firstName, string lastName, DateOnly dateOfBirth)
+    {
+        FirstName = firstName;
+        LastName = lastName;
+        DateOfBirth = dateOfBirth;
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

@@ -20,7 +20,7 @@ public class TherapistsController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<TherapistDto>>> GetAll(CancellationToken ct)
     {
         var therapists = await _repository.GetAllAsync(ct);
-        return Ok(therapists.Select(static therapist => MapToDto(therapist)).ToList());
+        return Ok(therapists.Select(static t => MapToDto(t)).ToList());
     }
 
     [HttpGet("{id:int}")]
@@ -33,15 +33,7 @@ public class TherapistsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<TherapistDto>> Create(CreateTherapistRequest request, CancellationToken ct)
     {
-        var therapist = new Therapist
-        {
-            FirstName = request.FirstName,
-            LastName = request.LastName,
-            Email = request.Email,
-            Phone = request.Phone,
-            Specialty = request.Specialty
-        };
-
+        var therapist = new Therapist(request.FirstName, request.LastName, request.Email, request.Phone, request.Specialty);
         var created = await _repository.AddAsync(therapist, ct);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
     }
@@ -52,11 +44,8 @@ public class TherapistsController : ControllerBase
         var existing = await _repository.GetByIdAsync(id, ct);
         if (existing is null) return NotFound();
 
-        existing.FirstName = request.FirstName;
-        existing.LastName = request.LastName;
-        existing.Email = request.Email;
-        existing.Phone = request.Phone;
-        existing.Specialty = request.Specialty;
+        existing.UpdateDetails(request.FirstName, request.LastName, request.Specialty);
+        existing.UpdateContactInfo(request.Email, request.Phone);
 
         await _repository.UpdateAsync(existing, ct);
         return NoContent();

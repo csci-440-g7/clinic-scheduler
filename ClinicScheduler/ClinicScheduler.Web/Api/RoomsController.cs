@@ -57,13 +57,8 @@ public class RoomsController : ControllerBase
         var location = await _locationRepository.GetByIdAsync(request.LocationId, ct);
         if (location is null) return BadRequest("Invalid LocationId.");
 
-        var room = new Room
-        {
-            Name = request.Name,
-            Capacity = request.Capacity,
-            Description = request.Description,
-            LocationId = request.LocationId
-        };
+        var room = new Room(request.Name, request.Capacity, location);
+        room.UpdateDetails(request.Name, request.Capacity, request.Description);
 
         var created = await _roomRepository.AddAsync(room, ct);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created, location.Name));
@@ -75,13 +70,7 @@ public class RoomsController : ControllerBase
         var existing = await _roomRepository.GetByIdAsync(id, ct);
         if (existing is null) return NotFound();
 
-        var location = await _locationRepository.GetByIdAsync(request.LocationId, ct);
-        if (location is null) return BadRequest("Invalid LocationId.");
-
-        existing.Name = request.Name;
-        existing.Capacity = request.Capacity;
-        existing.Description = request.Description;
-        existing.LocationId = request.LocationId;
+        existing.UpdateDetails(request.Name, request.Capacity, request.Description);
 
         await _roomRepository.UpdateAsync(existing, ct);
         return NoContent();
@@ -104,7 +93,7 @@ public class RoomsController : ControllerBase
         Capacity = room.Capacity,
         Description = room.Description,
         LocationId = room.LocationId,
-        LocationName = locationNames.TryGetValue(room.LocationId, out var locationName) ? locationName : null
+        LocationName = locationNames.TryGetValue(room.LocationId, out var name) ? name : null
     };
 
     private static RoomDto MapToDto(Room room, string? locationName) => new()

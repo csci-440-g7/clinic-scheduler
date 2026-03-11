@@ -43,4 +43,12 @@ public class Therapist
         Phone = phone;
         UpdatedAt = DateTime.UtcNow;
     }
+
+    public void UpdateDetails(string firstName, string lastName, string? specialty)
+    {
+        FirstName = firstName;
+        LastName = lastName;
+        Specialty = specialty;
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

@@ -47,4 +47,15 @@ public class Location
         ZipCode = zipCode;
         UpdatedAt = DateTime.UtcNow;
     }
+
+    public void UpdateDetails(string name, string address, string? city, string? state, string? zipCode, string? timeZone)
+    {
+        Name = name;
+        Address = address;
+        City = city;
+        State = state;
+        ZipCode = zipCode;
+        TimeZone = timeZone;
+        UpdatedAt = DateTime.UtcNow;
+    }
 }

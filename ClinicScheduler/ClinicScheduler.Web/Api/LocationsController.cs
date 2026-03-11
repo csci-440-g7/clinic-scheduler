@@ -33,15 +33,9 @@ public class LocationsController : ControllerBase
     [HttpPost]
     public async Task<ActionResult<LocationDto>> Create(CreateLocationRequest request, CancellationToken ct)
     {
-        var location = new Location
-        {
-            Name = request.Name,
-            Address = request.Address,
-            City = request.City,
-            State = request.State,
-            ZipCode = request.ZipCode,
-            TimeZone = request.TimeZone
-        };
+        var location = new Location(request.Name, request.Address);
+        location.UpdateAddress(request.Address, request.City, request.State, request.ZipCode);
+        location.TimeZone = request.TimeZone;
 
         var created = await _repository.AddAsync(location, ct);
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
@@ -53,12 +47,7 @@ public class LocationsController : ControllerBase
         var existing = await _repository.GetByIdAsync(id, ct);
         if (existing is null) return NotFound();
 
-        existing.Name = request.Name;
-        existing.Address = request.Address;
-        existing.City = request.City;
-        existing.State = request.State;
-        existing.ZipCode = request.ZipCode;
-        existing.TimeZone = request.TimeZone;
+        existing.UpdateDetails(request.Name, request.Address, request.City, request.State, request.ZipCode, request.TimeZone);
 
         await _repository.UpdateAsync(existing, ct);
         return NoContent();

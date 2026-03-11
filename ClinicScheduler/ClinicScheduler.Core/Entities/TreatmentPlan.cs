@@ -66,6 +66,21 @@ public class TreatmentPlan
         return startDate.AddDays(totalCalendarDays);
     }
 
+    public void UpdateSchedule(int frequencyPerWeek, int totalDays, DateOnly startDate)
+    {
+        if (!ValidFrequencies.Contains(frequencyPerWeek))
+            throw new ArgumentException($"Frequency must be one of the following: {string.Join(", ", ValidFrequencies)}.", nameof(frequencyPerWeek));
+
+        if (!ValidDurations.Contains(totalDays))
+            throw new ArgumentException($"Total days must be one of the following: {string.Join(", ", ValidDurations)}.", nameof(totalDays));
+
+        FrequencyPerWeek = frequencyPerWeek;
+        TotalDays = totalDays;
+        StartDate = startDate;
+        EndDate = CalculateEndDate(startDate, totalDays, frequencyPerWeek);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
     public void ChangeTherapist(Therapist newTherapist)
     {
         ArgumentNullException.ThrowIfNull(newTherapist);
