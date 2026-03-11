@@ -1,9 +1,68 @@
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using ClinicScheduler.Core.Services;
 using ClinicScheduler.Web.Components;
 using ClinicScheduler.Shared.Services;
 using ClinicScheduler.Web.Services;
+using ClinicScheduler.Core.Interfaces;
+using ClinicScheduler.Infrastructure.Data;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.OpenApi;
 using MudBlazor.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Register the Database Context
+var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(defaultConnectionString))
+{
+    throw new InvalidOperationException(
+        "The connection string 'DefaultConnection' is missing or empty. Please configure a valid connection string in appsettings.json or environment configuration.");
+}
+
+builder.Services.AddDbContext<ClinicDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Register the repositories
+builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+
+// Register business logic services
+builder.Services.AddScoped<AppointmentSchedulingService>();
+
+// Add API Controllers
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+    {
+        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+    });
+
+builder.Services.AddOpenApi(options =>
+{
+    options.AddSchemaTransformer((schema, context, CancellationToken) =>
+    {
+        if (context.JsonTypeInfo.Type.IsEnum)
+        {
+            schema.Type = JsonSchemaType.String;
+            schema.Enum = context.JsonTypeInfo.Type
+                .GetEnumNames()
+                .Select(name => JsonValue.Create(name))
+                .Cast<JsonNode>()
+                .ToArray();
+        }
+
+        return Task.CompletedTask;
+    });
+    options.AddDocumentTransformer((document, AppContext, CancellationToken) =>
+    {
+        document.Info = new OpenApiInfo
+        {
+            Title = "Clinic Scheduler API",
+            Version = "v1"
+        };
+        
+        return Task.CompletedTask;
+    });
+});
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
@@ -21,6 +80,14 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
 {
     app.UseWebAssemblyDebugging();
+
+    app.MapOpenApi();
+
+    app.UseSwaggerUI(options =>
+    {
+        options.SwaggerEndpoint("/openapi/v1.json", "ClinicScheduler API v1");
+        options.RoutePrefix = "swagger";
+    });
 }
 else
 {
@@ -36,6 +103,7 @@ app.UseAntiforgery();
 
 app.MapStaticAssets();
 
+// Map API endpoints
 app.MapControllers();
 
 app.MapRazorComponents<App>()
