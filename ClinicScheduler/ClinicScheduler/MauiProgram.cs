@@ -1,7 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using ClinicScheduler.Shared.Services;
 using ClinicScheduler.Services;
-using MudBlazor.Services;
+using Radzen;
 
 namespace ClinicScheduler;
 
@@ -23,7 +23,7 @@ public static class MauiProgram
         builder.Services.AddBlazorWebViewDeveloperTools();
         builder.Logging.AddDebug();
 #endif
-        builder.Services.AddMudServices();
+        builder.Services.AddRadzenComponents();
         return builder.Build();
     }
 }

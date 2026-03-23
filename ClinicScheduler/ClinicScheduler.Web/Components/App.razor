@@ -12,12 +12,14 @@
     <ImportMap/>
     <link rel="icon" type="image/png" href="/_content/ClinicScheduler.Shared/favicon.png"/>
     <HeadOutlet @rendermode="InteractiveAuto"/>
+    <RadzenTheme Theme="material" />
 </head>
 
 <body>
 <Routes @rendermode="InteractiveAuto"/>
 <ReconnectModal/>
 <script src="@Assets["_framework/blazor.web.js"]"></script>
+<script src="_content/Radzen.Blazor/Radzen.Blazor.js?v=@(typeof(Radzen.Colors).Assembly.GetName().Version)"></script>
 </body>
 
 </html>
