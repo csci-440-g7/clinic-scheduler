@@ -1,0 +1,153 @@
+@page "/"
+@rendermode InteractiveServer
+@inject IClinicApiService Api
+
+<PageTitle>Clinic Scheduler</PageTitle>
+
+<div class="rz-p-4">
+    <h2 class="rz-mb-4">Dashboard</h2>
+
+    @if (_errorMessage is not null)
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="true" class="rz-mb-4" Close="() => _errorMessage = null">
+            @_errorMessage
+        </RadzenAlert>
+    }
+
+    <div class="rz-display-flex rz-flex-wrap rz-gap-4">
+        <RadzenCard Style="min-width: 180px; flex: 1;">
+            <div class="rz-p-4 rz-text-align-center">
+                <RadzenIcon Icon="people" Style="font-size: 2rem; color: var(--rz-primary);" />
+                <h4 class="rz-mt-2 rz-mb-1">Patients</h4>
+                @if (_loading)
+                {
+                    <RadzenProgressBar Value="100" Mode="ProgressBarMode.Indeterminate" Style="height: 4px;" />
+                }
+                else
+                {
+                    <span style="font-size: 1.75rem; font-weight: bold;">@_patientCount</span>
+                }
+                <div class="rz-mt-2"><a href="/patients">View all</a></div>
+            </div>
+        </RadzenCard>
+
+        <RadzenCard Style="min-width: 180px; flex: 1;">
+            <div class="rz-p-4 rz-text-align-center">
+                <RadzenIcon Icon="badge" Style="font-size: 2rem; color: var(--rz-primary);" />
+                <h4 class="rz-mt-2 rz-mb-1">Therapists</h4>
+                @if (_loading)
+                {
+                    <RadzenProgressBar Value="100" Mode="ProgressBarMode.Indeterminate" Style="height: 4px;" />
+                }
+                else
+                {
+                    <span style="font-size: 1.75rem; font-weight: bold;">@_therapistCount</span>
+                }
+                <div class="rz-mt-2"><a href="/therapists">View all</a></div>
+            </div>
+        </RadzenCard>
+
+        <RadzenCard Style="min-width: 180px; flex: 1;">
+            <div class="rz-p-4 rz-text-align-center">
+                <RadzenIcon Icon="calendar_month" Style="font-size: 2rem; color: var(--rz-primary);" />
+                <h4 class="rz-mt-2 rz-mb-1">Appointments</h4>
+                @if (_loading)
+                {
+                    <RadzenProgressBar Value="100" Mode="ProgressBarMode.Indeterminate" Style="height: 4px;" />
+                }
+                else
+                {
+                    <span style="font-size: 1.75rem; font-weight: bold;">@_appointmentCount</span>
+                }
+                <div class="rz-mt-2"><a href="/schedule">View all</a></div>
+            </div>
+        </RadzenCard>
+
+        <RadzenCard Style="min-width: 180px; flex: 1;">
+            <div class="rz-p-4 rz-text-align-center">
+                <RadzenIcon Icon="assignment" Style="font-size: 2rem; color: var(--rz-primary);" />
+                <h4 class="rz-mt-2 rz-mb-1">Treatment Plans</h4>
+                @if (_loading)
+                {
+                    <RadzenProgressBar Value="100" Mode="ProgressBarMode.Indeterminate" Style="height: 4px;" />
+                }
+                else
+                {
+                    <span style="font-size: 1.75rem; font-weight: bold;">@_treatmentPlanCount</span>
+                }
+                <div class="rz-mt-2"><a href="/treatment-plans">View all</a></div>
+            </div>
+        </RadzenCard>
+
+        <RadzenCard Style="min-width: 180px; flex: 1;">
+            <div class="rz-p-4 rz-text-align-center">
+                <RadzenIcon Icon="meeting_room" Style="font-size: 2rem; color: var(--rz-primary);" />
+                <h4 class="rz-mt-2 rz-mb-1">Rooms</h4>
+                @if (_loading)
+                {
+                    <RadzenProgressBar Value="100" Mode="ProgressBarMode.Indeterminate" Style="height: 4px;" />
+                }
+                else
+                {
+                    <span style="font-size: 1.75rem; font-weight: bold;">@_roomCount</span>
+                }
+                <div class="rz-mt-2"><a href="/rooms">View all</a></div>
+            </div>
+        </RadzenCard>
+
+        <RadzenCard Style="min-width: 180px; flex: 1;">
+            <div class="rz-p-4 rz-text-align-center">
+                <RadzenIcon Icon="location_on" Style="font-size: 2rem; color: var(--rz-primary);" />
+                <h4 class="rz-mt-2 rz-mb-1">Locations</h4>
+                @if (_loading)
+                {
+                    <RadzenProgressBar Value="100" Mode="ProgressBarMode.Indeterminate" Style="height: 4px;" />
+                }
+                else
+                {
+                    <span style="font-size: 1.75rem; font-weight: bold;">@_locationCount</span>
+                }
+                <div class="rz-mt-2"><a href="/locations">View all</a></div>
+            </div>
+        </RadzenCard>
+    </div>
+</div>
+
+@code {
+    private bool _loading = true;
+    private string? _errorMessage;
+    private int _patientCount;
+    private int _therapistCount;
+    private int _appointmentCount;
+    private int _treatmentPlanCount;
+    private int _roomCount;
+    private int _locationCount;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            var patientsTask = Api.GetPatientsAsync();
+            var therapistsTask = Api.GetTherapistsAsync();
+            var appointmentsTask = Api.GetAppointmentsAsync();
+            var treatmentPlansTask = Api.GetTreatmentPlansAsync();
+            var roomsTask = Api.GetRoomsAsync();
+            var locationsTask = Api.GetLocationsAsync();
+            await Task.WhenAll(patientsTask, therapistsTask, appointmentsTask, treatmentPlansTask, roomsTask, locationsTask);
+            _patientCount = patientsTask.Result.Count;
+            _therapistCount = therapistsTask.Result.Count;
+            _appointmentCount = appointmentsTask.Result.Count;
+            _treatmentPlanCount = treatmentPlansTask.Result.Count;
+            _roomCount = roomsTask.Result.Count;
+            _locationCount = locationsTask.Result.Count;
+        }
+        catch
+        {
+            _errorMessage = "Could not load dashboard data. Ensure the database connection is configured.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+}

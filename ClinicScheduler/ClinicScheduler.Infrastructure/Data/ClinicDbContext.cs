@@ -1,4 +1,5 @@
 using ClinicScheduler.Core.Entities;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClinicScheduler.Infrastructure.Data;
@@ -7,7 +8,7 @@ namespace ClinicScheduler.Infrastructure.Data;
 /// The EF Core DbContext - the "bridge" between your C# objects and the database.
 /// Each DbSet becomes a table. EF Core tracks changes to objects and generates SQL.
 /// </summary>
-public class ClinicDbContext : DbContext
+public class ClinicDbContext : IdentityDbContext<AppUser>
 {
     public ClinicDbContext(DbContextOptions<ClinicDbContext> options) : base(options) { }
 

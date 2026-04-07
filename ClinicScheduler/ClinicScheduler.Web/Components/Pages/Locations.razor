@@ -1,0 +1,117 @@
+@page "/locations"
+@rendermode InteractiveServer
+@inject IClinicApiService Api
+@inject DialogService DialogService
+
+<PageTitle>Locations</PageTitle>
+
+<div class="rz-p-4">
+    <div class="rz-display-flex rz-justify-content-between rz-align-items-center rz-mb-4">
+        <h2>Locations</h2>
+        <RadzenButton Text="Add Location" Icon="add" Click="OpenCreateDialog" />
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="true" class="rz-mb-4" Close="() => _errorMessage = null">
+            @_errorMessage
+        </RadzenAlert>
+    }
+
+    @if (_isLoading)
+    {
+        <RadzenProgressBar Value="100" Mode="ProgressBarMode.Indeterminate" />
+    }
+    else
+    {
+        <RadzenDataGrid Data="_items" TItem="LocationDto" AllowSorting="true"
+                        EmptyText="No locations found.">
+            <Columns>
+                <RadzenDataGridColumn TItem="LocationDto" Property="Name" Title="Name" />
+                <RadzenDataGridColumn TItem="LocationDto" Property="Address" Title="Address" />
+                <RadzenDataGridColumn TItem="LocationDto" Property="City" Title="City" />
+                <RadzenDataGridColumn TItem="LocationDto" Property="State" Title="State" Width="80px" />
+                <RadzenDataGridColumn TItem="LocationDto" Property="ZipCode" Title="Zip" Width="90px" />
+                <RadzenDataGridColumn TItem="LocationDto" Property="TimeZone" Title="Time Zone" />
+                <RadzenDataGridColumn TItem="LocationDto" Title="Actions" Width="120px" Sortable="false">
+                    <Template Context="item">
+                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                                      Click="() => OpenEditDialog(item)" class="rz-mr-1" />
+                        <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small"
+                                      Click="() => DeleteAsync(item)" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    }
+</div>
+
+@code {
+    private List<LocationDto> _items = [];
+    private bool _isLoading = true;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        try { _items = await Api.GetLocationsAsync(); }
+        catch { _errorMessage = "Failed to load locations."; }
+        finally { _isLoading = false; }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var result = await DialogService.OpenAsync<LocationDialog>("Add Location",
+            new Dictionary<string, object?>(), new DialogOptions { Width = "520px" });
+        if (result is LocationDialog.LocationFormModel model)
+        {
+            var created = await Api.CreateLocationAsync(new CreateLocationRequest
+            {
+                Name = model.Name,
+                Address = model.Address,
+                City = model.City,
+                State = model.State,
+                ZipCode = model.ZipCode,
+                TimeZone = model.TimeZone
+            });
+            if (created is null) _errorMessage = "Failed to create location.";
+            else await LoadAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(LocationDto item)
+    {
+        var result = await DialogService.OpenAsync<LocationDialog>("Edit Location",
+            new Dictionary<string, object?> { ["Location"] = item },
+            new DialogOptions { Width = "520px" });
+        if (result is LocationDialog.LocationFormModel model)
+        {
+            var ok = await Api.UpdateLocationAsync(item.Id, new UpdateLocationRequest
+            {
+                Name = model.Name,
+                Address = model.Address,
+                City = model.City,
+                State = model.State,
+                ZipCode = model.ZipCode,
+                TimeZone = model.TimeZone
+            });
+            if (!ok) _errorMessage = "Failed to update location.";
+            else await LoadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(LocationDto item)
+    {
+        var confirmed = await DialogService.Confirm(
+            $"Delete location \"{item.Name}\"?", "Confirm Delete",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirmed == true)
+        {
+            var ok = await Api.DeleteLocationAsync(item.Id);
+            if (!ok) _errorMessage = "Failed to delete location.";
+            else await LoadAsync();
+        }
+    }
+}

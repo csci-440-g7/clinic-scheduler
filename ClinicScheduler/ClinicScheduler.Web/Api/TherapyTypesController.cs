@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using ClinicScheduler.Core.Entities;
 using ClinicScheduler.Core.Interfaces;
 using ClinicScheduler.Web.Contracts.TherapyTypes;
@@ -6,6 +7,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace ClinicScheduler.Web.Api;
 
 [ApiController]
+[AllowAnonymous]
 [Route("api/[controller]")]
 public class TherapyTypesController : ControllerBase
 {

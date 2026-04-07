@@ -1,5 +1,7 @@
 ﻿@using System.Net.Http
 @using System.Net.Http.Json
+@using Microsoft.AspNetCore.Authorization
+@using Microsoft.AspNetCore.Components.Authorization
 @using Microsoft.AspNetCore.Components.Forms
 @using Microsoft.AspNetCore.Components.Routing
 @using Microsoft.AspNetCore.Components.Web
@@ -8,8 +10,18 @@
 @using Microsoft.JSInterop
 @using ClinicScheduler.Shared
 @using ClinicScheduler.Shared.Layout
+@using ClinicScheduler.Web.Services
 @using ClinicScheduler.Web.Client
 @using ClinicScheduler.Web.Client.Layout
 @using ClinicScheduler.Web.Components
+@using ClinicScheduler.Web.Components.Dialogs
+@using ClinicScheduler.Web.Contracts.Appointments
+@using ClinicScheduler.Web.Contracts.Locations
+@using ClinicScheduler.Web.Contracts.Patients
+@using ClinicScheduler.Web.Contracts.Rooms
+@using ClinicScheduler.Web.Contracts.Therapists
+@using ClinicScheduler.Web.Contracts.TherapyTypes
+@using ClinicScheduler.Web.Contracts.TreatmentPlans
+@using ClinicScheduler.Core.Entities
 @using Radzen
 @using Radzen.Blazor

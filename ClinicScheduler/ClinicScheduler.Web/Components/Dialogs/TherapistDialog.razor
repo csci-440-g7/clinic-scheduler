@@ -1,0 +1,67 @@
+@inject DialogService DialogService
+
+<RadzenTemplateForm TItem="TherapistFormModel" Data="_model" Submit="OnSubmit">
+    <div class="rz-p-4" style="min-width: 400px;">
+        <div class="rz-display-flex rz-gap-3 rz-mb-3">
+            <div style="flex: 1;">
+                <RadzenLabel Text="First Name *" />
+                <RadzenTextBox @bind-Value="_model.FirstName" Style="width: 100%;" MaxLength="100" />
+            </div>
+            <div style="flex: 1;">
+                <RadzenLabel Text="Last Name *" />
+                <RadzenTextBox @bind-Value="_model.LastName" Style="width: 100%;" MaxLength="100" />
+            </div>
+        </div>
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Email *" />
+            <RadzenTextBox @bind-Value="_model.Email" Style="width: 100%;" MaxLength="255" />
+        </div>
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Phone" />
+            <RadzenTextBox @bind-Value="_model.Phone" Style="width: 100%;" MaxLength="25" />
+        </div>
+        <div class="rz-mb-4">
+            <RadzenLabel Text="Specialty" />
+            <RadzenTextBox @bind-Value="_model.Specialty" Style="width: 100%;" MaxLength="100" />
+        </div>
+        <div class="rz-display-flex rz-justify-content-end rz-gap-2">
+            <RadzenButton ButtonStyle="ButtonStyle.Light" Text="Cancel" Click="Cancel" />
+            <RadzenButton ButtonType="ButtonType.Submit" Text="@(_isEdit ? "Save" : "Create")"
+                          Disabled="@(string.IsNullOrWhiteSpace(_model.FirstName) || string.IsNullOrWhiteSpace(_model.LastName) || string.IsNullOrWhiteSpace(_model.Email))" />
+        </div>
+    </div>
+</RadzenTemplateForm>
+
+@code {
+    [Parameter] public TherapistDto? Therapist { get; set; }
+
+    private TherapistFormModel _model = new();
+    private bool _isEdit;
+
+    protected override void OnParametersSet()
+    {
+        _isEdit = Therapist is not null;
+        if (Therapist is not null)
+        {
+            _model = new TherapistFormModel
+            {
+                FirstName = Therapist.FirstName,
+                LastName = Therapist.LastName,
+                Email = Therapist.Email,
+                Phone = Therapist.Phone
+            };
+        }
+    }
+
+    private void OnSubmit() => DialogService.Close(_model);
+    private void Cancel() => DialogService.Close(null);
+
+    public class TherapistFormModel
+    {
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string? Phone { get; set; }
+        public string? Specialty { get; set; }
+    }
+}

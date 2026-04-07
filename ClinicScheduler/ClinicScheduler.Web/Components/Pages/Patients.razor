@@ -1,0 +1,117 @@
+@page "/patients"
+@rendermode InteractiveServer
+@inject IClinicApiService Api
+@inject DialogService DialogService
+
+<PageTitle>Patients</PageTitle>
+
+<div class="rz-p-4">
+    <div class="rz-display-flex rz-justify-content-between rz-align-items-center rz-mb-4">
+        <h2>Patients</h2>
+        <RadzenButton Text="Add Patient" Icon="add" Click="OpenCreateDialog" />
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="true" class="rz-mb-4" Close="() => _errorMessage = null">
+            @_errorMessage
+        </RadzenAlert>
+    }
+
+    @if (_isLoading)
+    {
+        <RadzenProgressBar Value="100" Mode="ProgressBarMode.Indeterminate" />
+    }
+    else
+    {
+        <RadzenDataGrid Data="_items" TItem="PatientDto" AllowSorting="true" AllowFiltering="true"
+                        FilterMode="FilterMode.SimpleWithMenu" EmptyText="No patients found.">
+            <Columns>
+                <RadzenDataGridColumn TItem="PatientDto" Title="Name" Sortable="true">
+                    <Template Context="item">@item.FirstName @item.LastName</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="PatientDto" Property="DateOfBirth" Title="Date of Birth" Width="140px">
+                    <Template Context="item">@item.DateOfBirth.ToString("yyyy-MM-dd")</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="PatientDto" Property="Email" Title="Email" />
+                <RadzenDataGridColumn TItem="PatientDto" Property="Phone" Title="Phone" Width="140px" />
+                <RadzenDataGridColumn TItem="PatientDto" Title="Actions" Width="120px" Sortable="false" Filterable="false">
+                    <Template Context="item">
+                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                                      Click="() => OpenEditDialog(item)" class="rz-mr-1" />
+                        <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small"
+                                      Click="() => DeleteAsync(item)" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    }
+</div>
+
+@code {
+    private List<PatientDto> _items = [];
+    private bool _isLoading = true;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        try { _items = await Api.GetPatientsAsync(); }
+        catch { _errorMessage = "Failed to load patients."; }
+        finally { _isLoading = false; }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var result = await DialogService.OpenAsync<PatientDialog>("Add Patient",
+            new Dictionary<string, object?>(), new DialogOptions { Width = "480px" });
+        if (result is PatientDialog.PatientFormModel model)
+        {
+            var created = await Api.CreatePatientAsync(new CreatePatientRequest
+            {
+                FirstName = model.FirstName,
+                LastName = model.LastName,
+                Email = model.Email,
+                Phone = model.Phone,
+                DateOfBirth = DateOnly.FromDateTime(model.DateOfBirth)
+            });
+            if (created is null) _errorMessage = "Failed to create patient.";
+            else await LoadAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(PatientDto item)
+    {
+        var result = await DialogService.OpenAsync<PatientDialog>("Edit Patient",
+            new Dictionary<string, object?> { ["Patient"] = item },
+            new DialogOptions { Width = "480px" });
+        if (result is PatientDialog.PatientFormModel model)
+        {
+            var ok = await Api.UpdatePatientAsync(item.Id, new UpdatePatientRequest
+            {
+                FirstName = model.FirstName,
+                LastName = model.LastName,
+                Email = model.Email,
+                Phone = model.Phone,
+                DateOfBirth = DateOnly.FromDateTime(model.DateOfBirth)
+            });
+            if (!ok) _errorMessage = "Failed to update patient.";
+            else await LoadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(PatientDto item)
+    {
+        var confirmed = await DialogService.Confirm(
+            $"Delete patient \"{item.FirstName} {item.LastName}\"?", "Confirm Delete",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirmed == true)
+        {
+            var ok = await Api.DeletePatientAsync(item.Id);
+            if (!ok) _errorMessage = "Failed to delete patient.";
+            else await LoadAsync();
+        }
+    }
+}

@@ -1,6 +1,6 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
-        <a class="navbar-brand" href="">ClinicScheduler</a>
+        <a class="navbar-brand" href="">Clinic Scheduler</a>
     </div>
 </div>
 
@@ -10,26 +10,67 @@
     <nav class="nav flex-column">
         <div class="nav-item px-3">
             <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="bi bi-house-door-fill-nav-menu" aria-hidden="true"></span> Home
+                <RadzenIcon Icon="home" aria-hidden="true" /> Home
             </NavLink>
         </div>
 
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="counter">
-                <span class="bi bi-plus-square-fill-nav-menu" aria-hidden="true"></span> Counter
+            <NavLink class="nav-link" href="schedule">
+                <RadzenIcon Icon="calendar_month" aria-hidden="true" /> Schedule
             </NavLink>
         </div>
 
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="weather">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Weather
+            <NavLink class="nav-link" href="patients">
+                <RadzenIcon Icon="people" aria-hidden="true" /> Patients
             </NavLink>
         </div>
-        
+
         <div class="nav-item px-3">
-            <NavLink class="nav-link" href="radzen-test">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Radzen Test
+            <NavLink class="nav-link" href="therapists">
+                <RadzenIcon Icon="badge" aria-hidden="true" /> Therapists
             </NavLink>
         </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="treatment-plans">
+                <RadzenIcon Icon="assignment" aria-hidden="true" /> Treatment Plans
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="rooms">
+                <RadzenIcon Icon="meeting_room" aria-hidden="true" /> Rooms
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="therapy-types">
+                <RadzenIcon Icon="favorite" aria-hidden="true" /> Therapy Types
+            </NavLink>
+        </div>
+
+        <div class="nav-item px-3">
+            <NavLink class="nav-link" href="locations">
+                <RadzenIcon Icon="location_on" aria-hidden="true" /> Locations
+            </NavLink>
+        </div>
+
+        <AuthorizeView>
+            <Authorized>
+                <div class="nav-item px-3 mt-3">
+                    <span class="nav-link text-muted" style="cursor:default; font-size:.8rem; opacity:.7;">
+                        @context.User.Identity?.Name
+                    </span>
+                </div>
+                <div class="nav-item px-3">
+                    <form method="post" action="/account/logout" style="margin:0;">
+                        <button type="submit" class="nav-link btn btn-link w-100 text-start p-0">
+                            <RadzenIcon Icon="logout" aria-hidden="true" /> Logout
+                        </button>
+                    </form>
+                </div>
+            </Authorized>
+        </AuthorizeView>
     </nav>
 </div>

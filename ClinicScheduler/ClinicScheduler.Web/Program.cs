@@ -1,10 +1,13 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using ClinicScheduler.Web;
 using ClinicScheduler.Web.Components;
 using ClinicScheduler.Shared.Services;
 using ClinicScheduler.Web.Services;
 using ClinicScheduler.Core.Interfaces;
 using ClinicScheduler.Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using Radzen;
@@ -24,6 +27,36 @@ builder.Services.AddDbContext<ClinicDbContext>(options =>
 
 // Register the repositories
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+
+// Identity + authentication
+builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
+{
+    options.Password.RequireDigit = false;
+    options.Password.RequiredLength = 6;
+    options.Password.RequireNonAlphanumeric = false;
+    options.Password.RequireUppercase = false;
+    options.SignIn.RequireConfirmedAccount = false;
+})
+.AddEntityFrameworkStores<ClinicDbContext>()
+.AddDefaultTokenProviders();
+
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.LoginPath = "/login";
+    options.AccessDeniedPath = "/login";
+    options.ExpireTimeSpan = TimeSpan.FromHours(8);
+    options.SlidingExpiration = true;
+});
+
+// Require auth everywhere; individual pages use [AllowAnonymous] to opt out
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
+
+builder.Services.AddCascadingAuthenticationState();
 
 // Add API Controllers
 builder.Services.AddControllers()
@@ -69,7 +102,24 @@ builder.Services.AddRazorComponents()
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
 
 builder.Services.AddRadzenComponents();
+
+// Register the clinic API service (HttpClient calls own API endpoints)
+builder.Services.AddHttpClient<IClinicApiService, ClinicApiService>(client =>
+{
+    var apiBase = builder.Configuration["ApiBaseUrl"] ?? "https://blazorwebcsharp__1.dev.localhost:7023/";
+    client.BaseAddress = new Uri(apiBase);
+});
+
 var app = builder.Build();
+
+// Auto-apply EF migrations on startup (safe to run repeatedly; no-ops when up-to-date)
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
+    var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+    db.Database.Migrate();
+    await SeedData.SeedAsync(db, userManager);
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -92,7 +142,13 @@ else
 }
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+
+// HTTPS termination is handled by the load balancer/proxy in production; skip redirect in container
+if (!app.Environment.IsProduction())
+    app.UseHttpsRedirection();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.UseAntiforgery();
 

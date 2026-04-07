@@ -1,0 +1,68 @@
+@inject DialogService DialogService
+
+<RadzenTemplateForm TItem="PatientFormModel" Data="_model" Submit="OnSubmit">
+    <div class="rz-p-4" style="min-width: 400px;">
+        <div class="rz-display-flex rz-gap-3 rz-mb-3">
+            <div style="flex: 1;">
+                <RadzenLabel Text="First Name *" />
+                <RadzenTextBox @bind-Value="_model.FirstName" Style="width: 100%;" MaxLength="100" />
+            </div>
+            <div style="flex: 1;">
+                <RadzenLabel Text="Last Name *" />
+                <RadzenTextBox @bind-Value="_model.LastName" Style="width: 100%;" MaxLength="100" />
+            </div>
+        </div>
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Email *" />
+            <RadzenTextBox @bind-Value="_model.Email" Style="width: 100%;" MaxLength="255" />
+        </div>
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Phone" />
+            <RadzenTextBox @bind-Value="_model.Phone" Style="width: 100%;" MaxLength="25" />
+        </div>
+        <div class="rz-mb-4">
+            <RadzenLabel Text="Date of Birth *" />
+            <RadzenDatePicker @bind-Value="_model.DateOfBirth" Style="width: 100%;" DateFormat="yyyy-MM-dd" />
+        </div>
+        <div class="rz-display-flex rz-justify-content-end rz-gap-2">
+            <RadzenButton ButtonStyle="ButtonStyle.Light" Text="Cancel" Click="Cancel" />
+            <RadzenButton ButtonType="ButtonType.Submit" Text="@(_isEdit ? "Save" : "Create")"
+                          Disabled="@(string.IsNullOrWhiteSpace(_model.FirstName) || string.IsNullOrWhiteSpace(_model.LastName) || string.IsNullOrWhiteSpace(_model.Email))" />
+        </div>
+    </div>
+</RadzenTemplateForm>
+
+@code {
+    [Parameter] public PatientDto? Patient { get; set; }
+
+    private PatientFormModel _model = new();
+    private bool _isEdit;
+
+    protected override void OnParametersSet()
+    {
+        _isEdit = Patient is not null;
+        if (Patient is not null)
+        {
+            _model = new PatientFormModel
+            {
+                FirstName = Patient.FirstName,
+                LastName = Patient.LastName,
+                Email = Patient.Email,
+                Phone = Patient.Phone,
+                DateOfBirth = Patient.DateOfBirth.ToDateTime(TimeOnly.MinValue)
+            };
+        }
+    }
+
+    private void OnSubmit() => DialogService.Close(_model);
+    private void Cancel() => DialogService.Close(null);
+
+    public class PatientFormModel
+    {
+        public string FirstName { get; set; } = string.Empty;
+        public string LastName { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public string? Phone { get; set; }
+        public DateTime DateOfBirth { get; set; } = DateTime.Today.AddYears(-30);
+    }
+}

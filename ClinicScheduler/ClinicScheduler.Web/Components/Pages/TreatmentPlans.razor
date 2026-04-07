@@ -1,0 +1,123 @@
+@page "/treatment-plans"
+@rendermode InteractiveServer
+@inject IClinicApiService Api
+@inject DialogService DialogService
+
+<PageTitle>Treatment Plans</PageTitle>
+
+<div class="rz-p-4">
+    <div class="rz-display-flex rz-justify-content-between rz-align-items-center rz-mb-4">
+        <h2>Treatment Plans</h2>
+        <RadzenButton Text="Add Treatment Plan" Icon="add" Click="OpenCreateDialog" />
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="true" class="rz-mb-4" Close="() => _errorMessage = null">
+            @_errorMessage
+        </RadzenAlert>
+    }
+
+    @if (_isLoading)
+    {
+        <RadzenProgressBar Value="100" Mode="ProgressBarMode.Indeterminate" />
+    }
+    else
+    {
+        <RadzenDataGrid Data="_items" TItem="TreatmentPlanDto" AllowSorting="true"
+                        EmptyText="No treatment plans found.">
+            <Columns>
+                <RadzenDataGridColumn TItem="TreatmentPlanDto" Property="PatientName" Title="Patient" />
+                <RadzenDataGridColumn TItem="TreatmentPlanDto" Property="TherapistName" Title="Therapist" />
+                <RadzenDataGridColumn TItem="TreatmentPlanDto" Property="StartDate" Title="Start Date" Width="120px">
+                    <Template Context="item">@item.StartDate.ToString("yyyy-MM-dd")</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="TreatmentPlanDto" Property="TotalDays" Title="Days" Width="80px" />
+                <RadzenDataGridColumn TItem="TreatmentPlanDto" Property="FrequencyPerWeek" Title="Freq/Wk" Width="90px" />
+                <RadzenDataGridColumn TItem="TreatmentPlanDto" Title="Therapies">
+                    <Template Context="item">
+                        @string.Join(", ", item.Therapies.Select(t => t.TherapyTypeName))
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="TreatmentPlanDto" Title="Actions" Width="120px" Sortable="false">
+                    <Template Context="item">
+                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                                      Click="() => OpenEditDialog(item)" class="rz-mr-1" />
+                        <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small"
+                                      Click="() => DeleteAsync(item)" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    }
+</div>
+
+@code {
+    private List<TreatmentPlanDto> _items = [];
+    private bool _isLoading = true;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        try { _items = await Api.GetTreatmentPlansAsync(); }
+        catch { _errorMessage = "Failed to load treatment plans."; }
+        finally { _isLoading = false; }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var result = await DialogService.OpenAsync<TreatmentPlanDialog>("Add Treatment Plan",
+            new Dictionary<string, object?>(), new DialogOptions { Width = "540px" });
+        if (result is TreatmentPlanDialog.TreatmentPlanFormModel model)
+        {
+            var created = await Api.CreateTreatmentPlanAsync(new CreateTreatmentPlanRequest
+            {
+                PatientId = model.PatientId,
+                TherapistId = model.TherapistId,
+                StartDate = DateOnly.FromDateTime(model.StartDate),
+                FrequencyPerWeek = model.FrequencyPerWeek,
+                TotalDays = model.TotalDays,
+                TherapyTypeIds = model.TherapyTypeIds
+            });
+            if (created is null) _errorMessage = "Failed to create treatment plan.";
+            else await LoadAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(TreatmentPlanDto item)
+    {
+        var result = await DialogService.OpenAsync<TreatmentPlanDialog>("Edit Treatment Plan",
+            new Dictionary<string, object?> { ["TreatmentPlan"] = item },
+            new DialogOptions { Width = "540px" });
+        if (result is TreatmentPlanDialog.TreatmentPlanFormModel model)
+        {
+            var ok = await Api.UpdateTreatmentPlanAsync(item.Id, new UpdateTreatmentPlanRequest
+            {
+                PatientId = model.PatientId,
+                TherapistId = model.TherapistId,
+                StartDate = DateOnly.FromDateTime(model.StartDate),
+                FrequencyPerWeek = model.FrequencyPerWeek,
+                TotalDays = model.TotalDays,
+                TherapyTypeIds = model.TherapyTypeIds
+            });
+            if (!ok) _errorMessage = "Failed to update treatment plan.";
+            else await LoadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(TreatmentPlanDto item)
+    {
+        var confirmed = await DialogService.Confirm(
+            $"Delete treatment plan for \"{item.PatientName}\"?", "Confirm Delete",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirmed == true)
+        {
+            var ok = await Api.DeleteTreatmentPlanAsync(item.Id);
+            if (!ok) _errorMessage = "Failed to delete treatment plan.";
+            else await LoadAsync();
+        }
+    }
+}

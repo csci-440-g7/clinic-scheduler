@@ -1,0 +1,95 @@
+@page "/login"
+@attribute [AllowAnonymous]
+@rendermode InteractiveServer
+
+<PageTitle>Sign In — Clinic Scheduler</PageTitle>
+
+<style>
+    .login-wrap {
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: #f0f4f8;
+    }
+    .login-card {
+        width: 100%;
+        max-width: 420px;
+        background: #fff;
+        border-radius: 12px;
+        box-shadow: 0 4px 24px rgba(0,0,0,.10);
+        padding: 2.5rem 2rem;
+    }
+    .login-logo {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        margin-bottom: 1.75rem;
+    }
+    .login-logo h1 { font-size: 1.4rem; font-weight: 700; margin: .5rem 0 .25rem; }
+    .login-logo p  { color: #6c757d; font-size: .9rem; margin: 0; }
+    .form-label { font-weight: 500; margin-bottom: .25rem; display: block; }
+    .login-input {
+        width: 100%;
+        padding: .55rem .75rem;
+        border: 1px solid #ced4da;
+        border-radius: 6px;
+        font-size: 1rem;
+        box-sizing: border-box;
+        outline: none;
+        transition: border-color .15s;
+    }
+    .login-input:focus { border-color: #1976d2; box-shadow: 0 0 0 3px rgba(25,118,210,.15); }
+</style>
+
+<div class="login-wrap">
+    <div class="login-card">
+        <div class="login-logo">
+            <RadzenIcon Icon="local_hospital" style="font-size:2.5rem; color:#1976d2;" />
+            <h1>Clinic Scheduler</h1>
+            <p>Sign in to continue</p>
+        </div>
+
+        @if (_showError)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="true" Variant="Variant.Flat"
+                         class="mb-3" style="margin-bottom:1rem;">
+                Invalid email or password. Please try again.
+            </RadzenAlert>
+        }
+
+        <form method="post" action="/account/login">
+            <input type="hidden" name="returnUrl" value="@_returnUrl" />
+
+            <div style="margin-bottom:1rem;">
+                <label class="form-label" for="email">Email</label>
+                <input id="email" name="email" type="email" class="login-input"
+                       placeholder="admin@clinic.com" autocomplete="email" required />
+            </div>
+
+            <div style="margin-bottom:1.5rem;">
+                <label class="form-label" for="password">Password</label>
+                <input id="password" name="password" type="password" class="login-input"
+                       placeholder="Password" autocomplete="current-password" required />
+            </div>
+
+            <RadzenButton ButtonType="ButtonType.Submit" Text="Sign In"
+                          ButtonStyle="ButtonStyle.Primary"
+                          style="width:100%;" />
+        </form>
+    </div>
+</div>
+
+@code {
+    [SupplyParameterFromQuery(Name = "returnUrl")] private string? ReturnUrl { get; set; }
+    [SupplyParameterFromQuery(Name = "error")]     private string? Error     { get; set; }
+
+    private bool   _showError;
+    private string _returnUrl = "/";
+
+    protected override void OnInitialized()
+    {
+        _showError = Error == "1";
+        _returnUrl = ReturnUrl ?? "/";
+    }
+}

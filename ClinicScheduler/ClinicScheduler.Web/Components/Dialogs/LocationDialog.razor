@@ -1,0 +1,75 @@
+@inject DialogService DialogService
+
+<RadzenTemplateForm TItem="LocationFormModel" Data="_model" Submit="OnSubmit">
+    <div class="rz-p-4" style="min-width: 400px;">
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Name *" />
+            <RadzenTextBox @bind-Value="_model.Name" Style="width: 100%;" MaxLength="150" />
+        </div>
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Address *" />
+            <RadzenTextBox @bind-Value="_model.Address" Style="width: 100%;" MaxLength="250" />
+        </div>
+        <div class="rz-display-flex rz-gap-3 rz-mb-3">
+            <div style="flex: 2;">
+                <RadzenLabel Text="City" />
+                <RadzenTextBox @bind-Value="_model.City" Style="width: 100%;" MaxLength="100" />
+            </div>
+            <div style="flex: 1;">
+                <RadzenLabel Text="State" />
+                <RadzenTextBox @bind-Value="_model.State" Style="width: 100%;" MaxLength="3" />
+            </div>
+            <div style="flex: 1;">
+                <RadzenLabel Text="Zip Code" />
+                <RadzenTextBox @bind-Value="_model.ZipCode" Style="width: 100%;" MaxLength="20" />
+            </div>
+        </div>
+        <div class="rz-mb-4">
+            <RadzenLabel Text="Time Zone (IANA)" />
+            <RadzenTextBox @bind-Value="_model.TimeZone" Placeholder="e.g. America/Chicago"
+                           Style="width: 100%;" MaxLength="100" />
+        </div>
+        <div class="rz-display-flex rz-justify-content-end rz-gap-2">
+            <RadzenButton ButtonStyle="ButtonStyle.Light" Text="Cancel" Click="Cancel" />
+            <RadzenButton ButtonType="ButtonType.Submit" Text="@(_isEdit ? "Save" : "Create")"
+                          Disabled="@(string.IsNullOrWhiteSpace(_model.Name) || string.IsNullOrWhiteSpace(_model.Address))" />
+        </div>
+    </div>
+</RadzenTemplateForm>
+
+@code {
+    [Parameter] public LocationDto? Location { get; set; }
+
+    private LocationFormModel _model = new();
+    private bool _isEdit;
+
+    protected override void OnParametersSet()
+    {
+        _isEdit = Location is not null;
+        if (Location is not null)
+        {
+            _model = new LocationFormModel
+            {
+                Name = Location.Name,
+                Address = Location.Address,
+                City = Location.City,
+                State = Location.State,
+                ZipCode = Location.ZipCode,
+                TimeZone = Location.TimeZone
+            };
+        }
+    }
+
+    private void OnSubmit() => DialogService.Close(_model);
+    private void Cancel() => DialogService.Close(null);
+
+    public class LocationFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Address { get; set; } = string.Empty;
+        public string? City { get; set; }
+        public string? State { get; set; }
+        public string? ZipCode { get; set; }
+        public string? TimeZone { get; set; }
+    }
+}

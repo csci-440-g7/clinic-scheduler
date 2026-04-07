@@ -1,0 +1,126 @@
+@page "/therapy-types"
+@rendermode InteractiveServer
+@inject IClinicApiService Api
+@inject DialogService DialogService
+
+<PageTitle>Therapy Types</PageTitle>
+
+<div class="rz-p-4">
+    <div class="rz-display-flex rz-justify-content-between rz-align-items-center rz-mb-4">
+        <h2>Therapy Types</h2>
+        <RadzenButton Text="Add Therapy Type" Icon="add" Click="OpenCreateDialog" />
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="true" class="rz-mb-4" Close="() => _errorMessage = null">
+            @_errorMessage
+        </RadzenAlert>
+    }
+
+    @if (_isLoading)
+    {
+        <RadzenProgressBar Value="100" Mode="ProgressBarMode.Indeterminate" />
+    }
+    else
+    {
+        <RadzenDataGrid Data="_items" TItem="TherapyTypeDto" AllowSorting="true"
+                        EmptyText="No therapy types found.">
+            <Columns>
+                <RadzenDataGridColumn TItem="TherapyTypeDto" Property="Name" Title="Name" />
+                <RadzenDataGridColumn TItem="TherapyTypeDto" Property="Specialty" Title="Specialty" />
+                <RadzenDataGridColumn TItem="TherapyTypeDto" Property="Description" Title="Description" Width="300px">
+                    <Template Context="item">
+                        <span title="@item.Description">
+                            @(item.Description?.Length > 60 ? item.Description[..60] + "…" : item.Description)
+                        </span>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="TherapyTypeDto" Property="ColorCode" Title="Color" Width="80px">
+                    <Template Context="item">
+                        @if (!string.IsNullOrWhiteSpace(item.ColorCode))
+                        {
+                            <span style="display:inline-block; width:24px; height:24px; border-radius:50%;
+                                         background-color:@item.ColorCode; border: 1px solid #ccc;"
+                                  title="@item.ColorCode"></span>
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="TherapyTypeDto" Title="Actions" Width="120px" Sortable="false">
+                    <Template Context="item">
+                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                                      Click="() => OpenEditDialog(item)" class="rz-mr-1" />
+                        <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small"
+                                      Click="() => DeleteAsync(item)" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    }
+</div>
+
+@code {
+    private List<TherapyTypeDto> _items = [];
+    private bool _isLoading = true;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        try { _items = await Api.GetTherapyTypesAsync(); }
+        catch { _errorMessage = "Failed to load therapy types."; }
+        finally { _isLoading = false; }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var result = await DialogService.OpenAsync<TherapyTypeDialog>("Add Therapy Type",
+            new Dictionary<string, object?>(), new DialogOptions { Width = "440px" });
+        if (result is TherapyTypeDialog.TherapyTypeFormModel model)
+        {
+            var created = await Api.CreateTherapyTypeAsync(new CreateTherapyTypeRequest
+            {
+                Name = model.Name,
+                Specialty = model.Specialty,
+                Description = model.Description,
+                ColorCode = string.IsNullOrWhiteSpace(model.ColorCode) ? null : model.ColorCode
+            });
+            if (created is null) _errorMessage = "Failed to create therapy type.";
+            else await LoadAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(TherapyTypeDto item)
+    {
+        var result = await DialogService.OpenAsync<TherapyTypeDialog>("Edit Therapy Type",
+            new Dictionary<string, object?> { ["TherapyType"] = item },
+            new DialogOptions { Width = "440px" });
+        if (result is TherapyTypeDialog.TherapyTypeFormModel model)
+        {
+            var ok = await Api.UpdateTherapyTypeAsync(item.Id, new UpdateTherapyTypeRequest
+            {
+                Name = model.Name,
+                Specialty = model.Specialty,
+                Description = model.Description,
+                ColorCode = string.IsNullOrWhiteSpace(model.ColorCode) ? null : model.ColorCode
+            });
+            if (!ok) _errorMessage = "Failed to update therapy type.";
+            else await LoadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(TherapyTypeDto item)
+    {
+        var confirmed = await DialogService.Confirm(
+            $"Delete therapy type \"{item.Name}\"?", "Confirm Delete",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirmed == true)
+        {
+            var ok = await Api.DeleteTherapyTypeAsync(item.Id);
+            if (!ok) _errorMessage = "Failed to delete therapy type.";
+            else await LoadAsync();
+        }
+    }
+}

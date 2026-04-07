@@ -1,0 +1,60 @@
+@inject DialogService DialogService
+
+<RadzenTemplateForm TItem="TherapyTypeFormModel" Data="_model" Submit="OnSubmit">
+    <div class="rz-p-4" style="min-width: 380px;">
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Name *" />
+            <RadzenTextBox @bind-Value="_model.Name" Style="width: 100%;" MaxLength="100" />
+        </div>
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Specialty" />
+            <RadzenTextBox @bind-Value="_model.Specialty" Style="width: 100%;" MaxLength="100" />
+        </div>
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Description" />
+            <RadzenTextArea @bind-Value="_model.Description" Style="width: 100%;" Rows="3" MaxLength="1000" />
+        </div>
+        <div class="rz-mb-4">
+            <RadzenLabel Text="Color Code (e.g. #FF5733)" />
+            <RadzenTextBox @bind-Value="_model.ColorCode" Style="width: 100%;" MaxLength="7" />
+        </div>
+        <div class="rz-display-flex rz-justify-content-end rz-gap-2">
+            <RadzenButton ButtonStyle="ButtonStyle.Light" Text="Cancel" Click="Cancel" />
+            <RadzenButton ButtonType="ButtonType.Submit" Text="@(_isEdit ? "Save" : "Create")"
+                          Disabled="@(string.IsNullOrWhiteSpace(_model.Name))" />
+        </div>
+    </div>
+</RadzenTemplateForm>
+
+@code {
+    [Parameter] public TherapyTypeDto? TherapyType { get; set; }
+
+    private TherapyTypeFormModel _model = new();
+    private bool _isEdit;
+
+    protected override void OnParametersSet()
+    {
+        _isEdit = TherapyType is not null;
+        if (TherapyType is not null)
+        {
+            _model = new TherapyTypeFormModel
+            {
+                Name = TherapyType.Name,
+                Specialty = TherapyType.Specialty,
+                Description = TherapyType.Description,
+                ColorCode = TherapyType.ColorCode
+            };
+        }
+    }
+
+    private void OnSubmit() => DialogService.Close(_model);
+    private void Cancel() => DialogService.Close(null);
+
+    public class TherapyTypeFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public string? Specialty { get; set; }
+        public string? Description { get; set; }
+        public string? ColorCode { get; set; }
+    }
+}

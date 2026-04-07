@@ -1,0 +1,117 @@
+@page "/rooms"
+@rendermode InteractiveServer
+@inject IClinicApiService Api
+@inject DialogService DialogService
+
+<PageTitle>Rooms</PageTitle>
+
+<div class="rz-p-4">
+    <div class="rz-display-flex rz-justify-content-between rz-align-items-center rz-mb-4">
+        <h2>Rooms</h2>
+        <RadzenButton Text="Add Room" Icon="add" Click="OpenCreateDialog" />
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="true" class="rz-mb-4" Close="() => _errorMessage = null">
+            @_errorMessage
+        </RadzenAlert>
+    }
+
+    @if (_isLoading)
+    {
+        <RadzenProgressBar Value="100" Mode="ProgressBarMode.Indeterminate" />
+    }
+    else
+    {
+        <RadzenDataGrid Data="_items" TItem="RoomDto" AllowSorting="true" AllowFiltering="true"
+                        FilterMode="FilterMode.SimpleWithMenu" EmptyText="No rooms found.">
+            <Columns>
+                <RadzenDataGridColumn TItem="RoomDto" Property="Name" Title="Name" />
+                <RadzenDataGridColumn TItem="RoomDto" Property="LocationName" Title="Location" />
+                <RadzenDataGridColumn TItem="RoomDto" Property="Capacity" Title="Capacity" Width="100px" />
+                <RadzenDataGridColumn TItem="RoomDto" Property="Description" Title="Description" Width="280px">
+                    <Template Context="item">
+                        <span title="@item.Description">
+                            @(item.Description?.Length > 50 ? item.Description[..50] + "…" : item.Description)
+                        </span>
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="RoomDto" Title="Actions" Width="120px" Sortable="false" Filterable="false">
+                    <Template Context="item">
+                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                                      Click="() => OpenEditDialog(item)" class="rz-mr-1" />
+                        <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small"
+                                      Click="() => DeleteAsync(item)" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    }
+</div>
+
+@code {
+    private List<RoomDto> _items = [];
+    private bool _isLoading = true;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        try { _items = await Api.GetRoomsAsync(); }
+        catch { _errorMessage = "Failed to load rooms."; }
+        finally { _isLoading = false; }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var result = await DialogService.OpenAsync<RoomDialog>("Add Room",
+            new Dictionary<string, object?>(), new DialogOptions { Width = "480px" });
+        if (result is RoomDialog.RoomFormModel model)
+        {
+            var created = await Api.CreateRoomAsync(new CreateRoomRequest
+            {
+                Name = model.Name,
+                LocationId = model.LocationId,
+                Capacity = model.Capacity,
+                Description = model.Description
+            });
+            if (created is null) _errorMessage = "Failed to create room.";
+            else await LoadAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(RoomDto item)
+    {
+        var result = await DialogService.OpenAsync<RoomDialog>("Edit Room",
+            new Dictionary<string, object?> { ["Room"] = item },
+            new DialogOptions { Width = "480px" });
+        if (result is RoomDialog.RoomFormModel model)
+        {
+            var ok = await Api.UpdateRoomAsync(item.Id, new UpdateRoomRequest
+            {
+                Name = model.Name,
+                LocationId = model.LocationId,
+                Capacity = model.Capacity,
+                Description = model.Description
+            });
+            if (!ok) _errorMessage = "Failed to update room.";
+            else await LoadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(RoomDto item)
+    {
+        var confirmed = await DialogService.Confirm(
+            $"Delete room \"{item.Name}\"?", "Confirm Delete",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirmed == true)
+        {
+            var ok = await Api.DeleteRoomAsync(item.Id);
+            if (!ok) _errorMessage = "Failed to delete room.";
+            else await LoadAsync();
+        }
+    }
+}

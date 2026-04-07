@@ -1,0 +1,140 @@
+@inject DialogService DialogService
+@inject IClinicApiService Api
+
+<RadzenTemplateForm TItem="AppointmentFormModel" Data="_model" Submit="OnSubmit">
+    <div class="rz-p-4" style="min-width: 480px;">
+        @if (_loadError is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Warning" ShowIcon="true" class="rz-mb-3">@_loadError</RadzenAlert>
+        }
+        @if (_submitError is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="true" class="rz-mb-3" Close="() => _submitError = null">
+                @_submitError
+            </RadzenAlert>
+        }
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Patient *" />
+            <RadzenDropDown @bind-Value="_model.PatientId" Data="_patients"
+                            ValueProperty="Id" Placeholder="Select patient..."
+                            Style="width: 100%;" Disabled="_loading">
+                <Template Context="p">@((PatientDto)p).FirstName @((PatientDto)p).LastName</Template>
+            </RadzenDropDown>
+        </div>
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Therapist *" />
+            <RadzenDropDown @bind-Value="_model.TherapistId" Data="_therapists"
+                            ValueProperty="Id" Placeholder="Select therapist..."
+                            Style="width: 100%;" Disabled="_loading">
+                <Template Context="t">@((TherapistDto)t).FirstName @((TherapistDto)t).LastName</Template>
+            </RadzenDropDown>
+        </div>
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Room *" />
+            <RadzenDropDown @bind-Value="_model.RoomId" Data="_rooms"
+                            TextProperty="Name" ValueProperty="Id"
+                            Placeholder="Select room..."
+                            Style="width: 100%;" Disabled="_loading" />
+        </div>
+        <div class="rz-display-flex rz-gap-3 rz-mb-3">
+            <div style="flex: 1;">
+                <RadzenLabel Text="Start Time *" />
+                <RadzenDatePicker @bind-Value="_model.StartTime" ShowTime="true" HoursStep="1" MinutesStep="15"
+                                  DateFormat="yyyy-MM-dd HH:mm" Style="width: 100%;" />
+            </div>
+            <div style="flex: 1;">
+                <RadzenLabel Text="End Time *" />
+                <RadzenDatePicker @bind-Value="_model.EndTime" ShowTime="true" HoursStep="1" MinutesStep="15"
+                                  DateFormat="yyyy-MM-dd HH:mm" Style="width: 100%;" />
+            </div>
+        </div>
+        @if (_isEdit)
+        {
+            <div class="rz-mb-3">
+                <RadzenLabel Text="Status" />
+                <RadzenDropDown @bind-Value="_model.Status" Data="_statusOptions"
+                                Style="width: 100%;" />
+            </div>
+        }
+        <div class="rz-mb-4">
+            <RadzenLabel Text="Notes" />
+            <RadzenTextArea @bind-Value="_model.Notes" Style="width: 100%;" Rows="3" MaxLength="2000" />
+        </div>
+        <div class="rz-display-flex rz-justify-content-end rz-gap-2">
+            <RadzenButton ButtonStyle="ButtonStyle.Light" Text="Cancel" Click="Cancel" />
+            <RadzenButton ButtonType="ButtonType.Submit" Text="@(_isEdit ? "Save" : "Create")"
+                          Disabled="@(_loading || _model.PatientId == 0 || _model.TherapistId == 0 || _model.RoomId == 0)" />
+        </div>
+    </div>
+</RadzenTemplateForm>
+
+@code {
+    [Parameter] public AppointmentDto? Appointment { get; set; }
+
+    private AppointmentFormModel _model = new();
+    private List<PatientDto> _patients = [];
+    private List<TherapistDto> _therapists = [];
+    private List<RoomDto> _rooms = [];
+    private List<AppointmentStatus> _statusOptions = Enum.GetValues<AppointmentStatus>().ToList();
+    private bool _loading = true;
+    private bool _isEdit;
+    private string? _loadError;
+    private string? _submitError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isEdit = Appointment is not null;
+        if (Appointment is not null)
+        {
+            _model = new AppointmentFormModel
+            {
+                PatientId = Appointment.PatientId,
+                TherapistId = Appointment.TherapistId,
+                RoomId = Appointment.RoomId,
+                TreatmentPlanId = Appointment.TreatmentPlanId,
+                StartTime = Appointment.StartTime,
+                EndTime = Appointment.EndTime,
+                Status = Appointment.Status,
+                Notes = Appointment.Notes
+            };
+        }
+        else
+        {
+            _model.StartTime = DateTime.Today.AddHours(9);
+            _model.EndTime = DateTime.Today.AddHours(9).AddMinutes(60);
+        }
+        try
+        {
+            var patientsTask = Api.GetPatientsAsync();
+            var therapistsTask = Api.GetTherapistsAsync();
+            var roomsTask = Api.GetRoomsAsync();
+            await Task.WhenAll(patientsTask, therapistsTask, roomsTask);
+            _patients = patientsTask.Result;
+            _therapists = therapistsTask.Result;
+            _rooms = roomsTask.Result;
+        }
+        catch
+        {
+            _loadError = "Could not load reference data.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnSubmit() => DialogService.Close(_model);
+    private void Cancel() => DialogService.Close(null);
+
+    public class AppointmentFormModel
+    {
+        public int PatientId { get; set; }
+        public int TherapistId { get; set; }
+        public int RoomId { get; set; }
+        public int? TreatmentPlanId { get; set; }
+        public DateTime StartTime { get; set; }
+        public DateTime EndTime { get; set; }
+        public AppointmentStatus Status { get; set; } = AppointmentStatus.Scheduled;
+        public string? Notes { get; set; }
+    }
+}

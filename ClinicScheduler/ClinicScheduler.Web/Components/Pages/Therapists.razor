@@ -1,0 +1,114 @@
+@page "/therapists"
+@rendermode InteractiveServer
+@inject IClinicApiService Api
+@inject DialogService DialogService
+
+<PageTitle>Therapists</PageTitle>
+
+<div class="rz-p-4">
+    <div class="rz-display-flex rz-justify-content-between rz-align-items-center rz-mb-4">
+        <h2>Therapists</h2>
+        <RadzenButton Text="Add Therapist" Icon="add" Click="OpenCreateDialog" />
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="true" class="rz-mb-4" Close="() => _errorMessage = null">
+            @_errorMessage
+        </RadzenAlert>
+    }
+
+    @if (_isLoading)
+    {
+        <RadzenProgressBar Value="100" Mode="ProgressBarMode.Indeterminate" />
+    }
+    else
+    {
+        <RadzenDataGrid Data="_items" TItem="TherapistDto" AllowSorting="true" AllowFiltering="true"
+                        FilterMode="FilterMode.SimpleWithMenu" EmptyText="No therapists found.">
+            <Columns>
+                <RadzenDataGridColumn TItem="TherapistDto" Title="Name" Sortable="true">
+                    <Template Context="item">@item.FirstName @item.LastName</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="TherapistDto" Property="Email" Title="Email" />
+                <RadzenDataGridColumn TItem="TherapistDto" Property="Phone" Title="Phone" Width="140px" />
+                <RadzenDataGridColumn TItem="TherapistDto" Title="Actions" Width="120px" Sortable="false" Filterable="false">
+                    <Template Context="item">
+                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                                      Click="() => OpenEditDialog(item)" class="rz-mr-1" />
+                        <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small"
+                                      Click="() => DeleteAsync(item)" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    }
+</div>
+
+@code {
+    private List<TherapistDto> _items = [];
+    private bool _isLoading = true;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        try { _items = await Api.GetTherapistsAsync(); }
+        catch { _errorMessage = "Failed to load therapists."; }
+        finally { _isLoading = false; }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var result = await DialogService.OpenAsync<TherapistDialog>("Add Therapist",
+            new Dictionary<string, object?>(), new DialogOptions { Width = "480px" });
+        if (result is TherapistDialog.TherapistFormModel model)
+        {
+            var created = await Api.CreateTherapistAsync(new CreateTherapistRequest
+            {
+                FirstName = model.FirstName,
+                LastName = model.LastName,
+                Email = model.Email,
+                Phone = model.Phone,
+                Specialty = model.Specialty
+            });
+            if (created is null) _errorMessage = "Failed to create therapist.";
+            else await LoadAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(TherapistDto item)
+    {
+        var result = await DialogService.OpenAsync<TherapistDialog>("Edit Therapist",
+            new Dictionary<string, object?> { ["Therapist"] = item },
+            new DialogOptions { Width = "480px" });
+        if (result is TherapistDialog.TherapistFormModel model)
+        {
+            var ok = await Api.UpdateTherapistAsync(item.Id, new UpdateTherapistRequest
+            {
+                FirstName = model.FirstName,
+                LastName = model.LastName,
+                Email = model.Email,
+                Phone = model.Phone,
+                Specialty = model.Specialty
+            });
+            if (!ok) _errorMessage = "Failed to update therapist.";
+            else await LoadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(TherapistDto item)
+    {
+        var confirmed = await DialogService.Confirm(
+            $"Delete therapist \"{item.FirstName} {item.LastName}\"?", "Confirm Delete",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirmed == true)
+        {
+            var ok = await Api.DeleteTherapistAsync(item.Id);
+            if (!ok) _errorMessage = "Failed to delete therapist.";
+            else await LoadAsync();
+        }
+    }
+}

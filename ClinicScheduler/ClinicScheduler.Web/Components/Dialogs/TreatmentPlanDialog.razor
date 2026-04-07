@@ -1,0 +1,130 @@
+@inject DialogService DialogService
+@inject IClinicApiService Api
+
+<RadzenTemplateForm TItem="TreatmentPlanFormModel" Data="_model" Submit="OnSubmit">
+    <div class="rz-p-4" style="min-width: 460px;">
+        @if (_loadError is not null)
+        {
+            <RadzenAlert AlertStyle="AlertStyle.Warning" ShowIcon="true" class="rz-mb-3">@_loadError</RadzenAlert>
+        }
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Patient *" />
+            <RadzenDropDown @bind-Value="_model.PatientId" Data="_patients"
+                            TextProperty="@nameof(PatientDto.LastName)" ValueProperty="Id"
+                            Placeholder="Select patient..."
+                            Style="width: 100%;" Disabled="_loading">
+                <Template Context="p">@((PatientDto)p).FirstName @((PatientDto)p).LastName</Template>
+            </RadzenDropDown>
+        </div>
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Therapist *" />
+            <RadzenDropDown @bind-Value="_model.TherapistId" Data="_therapists"
+                            TextProperty="@nameof(TherapistDto.LastName)" ValueProperty="Id"
+                            Placeholder="Select therapist..."
+                            Style="width: 100%;" Disabled="_loading">
+                <Template Context="t">@((TherapistDto)t).FirstName @((TherapistDto)t).LastName</Template>
+            </RadzenDropDown>
+        </div>
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Therapy Types * (select one or more)" />
+            <RadzenDropDown @bind-Value="_model.TherapyTypeIds" Data="_therapyTypes"
+                            TextProperty="Name" ValueProperty="Id"
+                            Multiple="true" AllowClear="true"
+                            Placeholder="Select therapy types..."
+                            Style="width: 100%;" Disabled="_loading" />
+        </div>
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Start Date *" />
+            <RadzenDatePicker @bind-Value="_model.StartDate" Style="width: 100%;" DateFormat="yyyy-MM-dd" />
+        </div>
+        <div class="rz-display-flex rz-gap-4 rz-mb-3">
+            <div style="flex: 1;">
+                <RadzenLabel Text="Frequency per Week *" />
+                <RadzenSelectBar @bind-Value="_model.FrequencyPerWeek" TValue="int"
+                                 Style="width: 100%;">
+                    <Items>
+                        <RadzenSelectBarItem Text="2" Value="2" />
+                        <RadzenSelectBarItem Text="3" Value="3" />
+                        <RadzenSelectBarItem Text="4" Value="4" />
+                    </Items>
+                </RadzenSelectBar>
+            </div>
+            <div style="flex: 1;">
+                <RadzenLabel Text="Total Days *" />
+                <RadzenSelectBar @bind-Value="_model.TotalDays" TValue="int"
+                                 Style="width: 100%;">
+                    <Items>
+                        <RadzenSelectBarItem Text="20" Value="20" />
+                        <RadzenSelectBarItem Text="30" Value="30" />
+                        <RadzenSelectBarItem Text="50" Value="50" />
+                    </Items>
+                </RadzenSelectBar>
+            </div>
+        </div>
+        <div class="rz-display-flex rz-justify-content-end rz-gap-2 rz-mt-4">
+            <RadzenButton ButtonStyle="ButtonStyle.Light" Text="Cancel" Click="Cancel" />
+            <RadzenButton ButtonType="ButtonType.Submit" Text="@(_isEdit ? "Save" : "Create")"
+                          Disabled="@(_loading || _model.PatientId == 0 || _model.TherapistId == 0 || _model.TherapyTypeIds.Count == 0)" />
+        </div>
+    </div>
+</RadzenTemplateForm>
+
+@code {
+    [Parameter] public TreatmentPlanDto? TreatmentPlan { get; set; }
+
+    private TreatmentPlanFormModel _model = new();
+    private List<PatientDto> _patients = [];
+    private List<TherapistDto> _therapists = [];
+    private List<TherapyTypeDto> _therapyTypes = [];
+    private bool _loading = true;
+    private bool _isEdit;
+    private string? _loadError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isEdit = TreatmentPlan is not null;
+        if (TreatmentPlan is not null)
+        {
+            _model = new TreatmentPlanFormModel
+            {
+                PatientId = TreatmentPlan.PatientId,
+                TherapistId = TreatmentPlan.TherapistId,
+                StartDate = TreatmentPlan.StartDate.ToDateTime(TimeOnly.MinValue),
+                FrequencyPerWeek = TreatmentPlan.FrequencyPerWeek,
+                TotalDays = TreatmentPlan.TotalDays,
+                TherapyTypeIds = TreatmentPlan.Therapies.Select(t => t.TherapyTypeId).ToList()
+            };
+        }
+        try
+        {
+            var patientsTask = Api.GetPatientsAsync();
+            var therapistsTask = Api.GetTherapistsAsync();
+            var therapyTypesTask = Api.GetTherapyTypesAsync();
+            await Task.WhenAll(patientsTask, therapistsTask, therapyTypesTask);
+            _patients = patientsTask.Result;
+            _therapists = therapistsTask.Result;
+            _therapyTypes = therapyTypesTask.Result;
+        }
+        catch
+        {
+            _loadError = "Could not load reference data.";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void OnSubmit() => DialogService.Close(_model);
+    private void Cancel() => DialogService.Close(null);
+
+    public class TreatmentPlanFormModel
+    {
+        public int PatientId { get; set; }
+        public int TherapistId { get; set; }
+        public DateTime StartDate { get; set; } = DateTime.Today;
+        public int FrequencyPerWeek { get; set; } = 3;
+        public int TotalDays { get; set; } = 30;
+        public List<int> TherapyTypeIds { get; set; } = [];
+    }
+}

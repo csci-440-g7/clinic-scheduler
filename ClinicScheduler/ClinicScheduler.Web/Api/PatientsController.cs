@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using ClinicScheduler.Core.Entities;
 using ClinicScheduler.Core.Interfaces;
 using ClinicScheduler.Web.Contracts.Patients;
@@ -10,6 +11,7 @@ namespace ClinicScheduler.Web.Api;
 /// The [ApiController] attribute enables automatic model validation and binding.
 /// </summary>
 [ApiController]
+[AllowAnonymous]
 [Route("api/[controller]")]
 public class PatientsController : ControllerBase
 {

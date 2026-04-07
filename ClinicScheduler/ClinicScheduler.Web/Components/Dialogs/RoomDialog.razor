@@ -1,0 +1,74 @@
+@inject DialogService DialogService
+@inject IClinicApiService Api
+
+<RadzenTemplateForm TItem="RoomFormModel" Data="_model" Submit="OnSubmit">
+    <div class="rz-p-4" style="min-width: 400px;">
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Name *" />
+            <RadzenTextBox @bind-Value="_model.Name" Style="width: 100%;" MaxLength="100" />
+        </div>
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Location *" />
+            @if (_locationsLoading)
+            {
+                <RadzenProgressBar Value="100" Mode="ProgressBarMode.Indeterminate" Style="height: 4px;" />
+            }
+            else
+            {
+                <RadzenDropDown @bind-Value="_model.LocationId" Data="_locations"
+                                TextProperty="Name" ValueProperty="Id"
+                                Placeholder="Select location..." Style="width: 100%;" />
+            }
+        </div>
+        <div class="rz-mb-3">
+            <RadzenLabel Text="Capacity" />
+            <RadzenNumeric @bind-Value="_model.Capacity" Min="1" Style="width: 100%;" />
+        </div>
+        <div class="rz-mb-4">
+            <RadzenLabel Text="Description" />
+            <RadzenTextArea @bind-Value="_model.Description" Style="width: 100%;" Rows="3" MaxLength="500" />
+        </div>
+        <div class="rz-display-flex rz-justify-content-end rz-gap-2">
+            <RadzenButton ButtonStyle="ButtonStyle.Light" Text="Cancel" Click="Cancel" />
+            <RadzenButton ButtonType="ButtonType.Submit" Text="@(_isEdit ? "Save" : "Create")"
+                          Disabled="@(string.IsNullOrWhiteSpace(_model.Name) || _model.LocationId == 0)" />
+        </div>
+    </div>
+</RadzenTemplateForm>
+
+@code {
+    [Parameter] public RoomDto? Room { get; set; }
+
+    private RoomFormModel _model = new();
+    private List<LocationDto> _locations = [];
+    private bool _locationsLoading = true;
+    private bool _isEdit;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isEdit = Room is not null;
+        if (Room is not null)
+        {
+            _model = new RoomFormModel
+            {
+                Name = Room.Name,
+                LocationId = Room.LocationId,
+                Capacity = Room.Capacity,
+                Description = Room.Description
+            };
+        }
+        _locations = await Api.GetLocationsAsync();
+        _locationsLoading = false;
+    }
+
+    private void OnSubmit() => DialogService.Close(_model);
+    private void Cancel() => DialogService.Close(null);
+
+    public class RoomFormModel
+    {
+        public string Name { get; set; } = string.Empty;
+        public int LocationId { get; set; }
+        public int Capacity { get; set; } = 1;
+        public string? Description { get; set; }
+    }
+}

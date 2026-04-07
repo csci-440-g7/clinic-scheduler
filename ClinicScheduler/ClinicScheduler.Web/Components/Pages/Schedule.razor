@@ -1,0 +1,146 @@
+@page "/schedule"
+@rendermode InteractiveServer
+@inject IClinicApiService Api
+@inject DialogService DialogService
+
+<PageTitle>Schedule</PageTitle>
+
+<div class="rz-p-4">
+    <div class="rz-display-flex rz-justify-content-between rz-align-items-center rz-mb-4">
+        <h2>Schedule</h2>
+        <RadzenButton Text="Add Appointment" Icon="add" Click="OpenCreateDialog" />
+    </div>
+
+    @if (_errorMessage is not null)
+    {
+        <RadzenAlert AlertStyle="AlertStyle.Danger" ShowIcon="true" class="rz-mb-4" Close="() => _errorMessage = null">
+            @_errorMessage
+        </RadzenAlert>
+    }
+
+    @if (_isLoading)
+    {
+        <RadzenProgressBar Value="100" Mode="ProgressBarMode.Indeterminate" />
+    }
+    else
+    {
+        <RadzenDataGrid Data="_items" TItem="AppointmentDto" AllowSorting="true" AllowFiltering="true"
+                        FilterMode="FilterMode.SimpleWithMenu" EmptyText="No appointments found."
+                        AllowPaging="true" PageSize="20">
+            <Columns>
+                <RadzenDataGridColumn TItem="AppointmentDto" Property="StartTime" Title="Date" Width="120px">
+                    <Template Context="item">@item.StartTime.ToString("yyyy-MM-dd")</Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="AppointmentDto" Title="Time" Width="130px" Sortable="false">
+                    <Template Context="item">
+                        @item.StartTime.ToString("HH:mm") – @item.EndTime.ToString("HH:mm")
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="AppointmentDto" Property="PatientName" Title="Patient" />
+                <RadzenDataGridColumn TItem="AppointmentDto" Property="TherapistName" Title="Therapist" />
+                <RadzenDataGridColumn TItem="AppointmentDto" Property="RoomName" Title="Room" Width="130px" />
+                <RadzenDataGridColumn TItem="AppointmentDto" Property="Status" Title="Status" Width="130px">
+                    <Template Context="item">
+                        <RadzenBadge BadgeStyle="@GetBadgeStyle(item.Status)" Text="@item.Status.ToString()" />
+                        @if (item.HasConflict)
+                        {
+                            <RadzenIcon Icon="warning" Style="color: orange; margin-left: 4px;" title="Scheduling conflict" />
+                        }
+                    </Template>
+                </RadzenDataGridColumn>
+                <RadzenDataGridColumn TItem="AppointmentDto" Title="Actions" Width="120px" Sortable="false" Filterable="false">
+                    <Template Context="item">
+                        <RadzenButton Icon="edit" ButtonStyle="ButtonStyle.Light" Size="ButtonSize.Small"
+                                      Click="() => OpenEditDialog(item)" class="rz-mr-1" />
+                        <RadzenButton Icon="delete" ButtonStyle="ButtonStyle.Danger" Size="ButtonSize.Small"
+                                      Click="() => DeleteAsync(item)" />
+                    </Template>
+                </RadzenDataGridColumn>
+            </Columns>
+        </RadzenDataGrid>
+    }
+</div>
+
+@code {
+    private List<AppointmentDto> _items = [];
+    private bool _isLoading = true;
+    private string? _errorMessage;
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _isLoading = true;
+        try { _items = await Api.GetAppointmentsAsync(); }
+        catch { _errorMessage = "Failed to load appointments."; }
+        finally { _isLoading = false; }
+    }
+
+    private async Task OpenCreateDialog()
+    {
+        var result = await DialogService.OpenAsync<AppointmentDialog>("Add Appointment",
+            new Dictionary<string, object?>(), new DialogOptions { Width = "560px" });
+        if (result is AppointmentDialog.AppointmentFormModel model)
+        {
+            var (created, error) = await Api.CreateAppointmentAsync(new CreateAppointmentRequest
+            {
+                PatientId = model.PatientId,
+                TherapistId = model.TherapistId,
+                RoomId = model.RoomId,
+                TreatmentPlanId = model.TreatmentPlanId,
+                StartTime = model.StartTime,
+                EndTime = model.EndTime,
+                Notes = model.Notes
+            });
+            if (created is null) _errorMessage = error ?? "Failed to create appointment.";
+            else await LoadAsync();
+        }
+    }
+
+    private async Task OpenEditDialog(AppointmentDto item)
+    {
+        var result = await DialogService.OpenAsync<AppointmentDialog>("Edit Appointment",
+            new Dictionary<string, object?> { ["Appointment"] = item },
+            new DialogOptions { Width = "560px" });
+        if (result is AppointmentDialog.AppointmentFormModel model)
+        {
+            var (ok, error) = await Api.UpdateAppointmentAsync(item.Id, new UpdateAppointmentRequest
+            {
+                PatientId = model.PatientId,
+                TherapistId = model.TherapistId,
+                RoomId = model.RoomId,
+                TreatmentPlanId = model.TreatmentPlanId,
+                StartTime = model.StartTime,
+                EndTime = model.EndTime,
+                Status = model.Status,
+                Notes = model.Notes
+            });
+            if (!ok) _errorMessage = error ?? "Failed to update appointment.";
+            else await LoadAsync();
+        }
+    }
+
+    private async Task DeleteAsync(AppointmentDto item)
+    {
+        var confirmed = await DialogService.Confirm(
+            $"Delete appointment for \"{item.PatientName}\" on {item.StartTime:yyyy-MM-dd}?",
+            "Confirm Delete",
+            new ConfirmOptions { OkButtonText = "Delete", CancelButtonText = "Cancel" });
+        if (confirmed == true)
+        {
+            var ok = await Api.DeleteAppointmentAsync(item.Id);
+            if (!ok) _errorMessage = "Failed to delete appointment.";
+            else await LoadAsync();
+        }
+    }
+
+    private static BadgeStyle GetBadgeStyle(AppointmentStatus status) => status switch
+    {
+        AppointmentStatus.Scheduled   => BadgeStyle.Info,
+        AppointmentStatus.Completed   => BadgeStyle.Success,
+        AppointmentStatus.Canceled    => BadgeStyle.Danger,
+        AppointmentStatus.Missed      => BadgeStyle.Warning,
+        AppointmentStatus.Rescheduled => BadgeStyle.Secondary,
+        _                             => BadgeStyle.Light
+    };
+}
