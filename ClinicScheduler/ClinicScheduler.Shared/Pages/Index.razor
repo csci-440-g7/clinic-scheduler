@@ -1,0 +1,22 @@
+@page "/"
+@inject NavigationManager Nav
+@inject ClinicScheduler.Shared.Services.SessionState Session
+@using ClinicScheduler.Shared.Services
+
+<h1>@MockClinicData.ClinicShortName</h1>
+<p>Redirecting...</p>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureLoadedAsync();
+
+        if (!Session.IsAuthenticated || string.IsNullOrWhiteSpace(Session.Role))
+        {
+            Nav.NavigateTo("/login", true);
+            return;
+        }
+
+        Nav.NavigateTo($"/dashboard/{Session.Role}", true);
+    }
+}

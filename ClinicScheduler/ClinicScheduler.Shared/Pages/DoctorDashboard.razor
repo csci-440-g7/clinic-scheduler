@@ -1,0 +1,406 @@
+@page "/dashboard/doctor"
+@inject NavigationManager Nav
+@inject ClinicScheduler.Shared.Services.SessionState Session
+@inject ClinicDataStore Data
+
+@using ClinicScheduler.Shared.Services
+
+<div class="role-shell">
+    <div class="role-header">
+        <h2>@DoctorDashboardTitle</h2>
+        <div class="role-actions">
+            <span class="role-badge">Role: Doctor</span>
+            <button class="link-button" @onclick="SignOut">Sign out</button>
+        </div>
+    </div>
+
+    @if (!Session.IsAuthenticated || Session.Role != "doctor")
+    {
+        <p>You are not signed in as a doctor.</p>
+        <button @onclick="@(() => Nav.NavigateTo("/login", true))">Go to Login</button>
+    }
+    else
+    {
+        <div class="role-tabs">
+            <button class="@GetTabClass("calendar")" @onclick="@(() => SetTab("calendar"))">Calendar</button>
+            <button class="@GetTabClass("patients")" @onclick="@(() => SetTab("patients"))">Patient Search</button>
+            <button class="@GetTabClass("notes")" @onclick="@(() => SetTab("notes"))">Notes</button>
+        </div>
+
+        <div class="role-body">
+            @if (activeTab == "calendar")
+            {
+                <CalendarView ViewerRole="doctor" DoctorId="@_doctor.Id" />
+            }
+            else if (activeTab == "patients")
+            {
+                <div class="panel">
+                    <h3>Search Patients</h3>
+                    <input class="field-input"
+                           placeholder="Search patient name"
+                           value="@patientSearchTerm"
+                           @oninput="(e) => OnPatientSearchChanged(e.Value?.ToString())" />
+                    <div style="margin-top: 12px;">
+                        @if (_filteredPatients.Count == 0)
+                        {
+                            <p class="muted">No matches.</p>
+                        }
+                        else
+                        {
+                            <ul class="list">
+                                @foreach (var p in _filteredPatients)
+                                {
+                                    <li class="list-item">
+                                        <button type="button" class="list-item-btn" @onclick="() => OpenPatientDetail(p)">
+                                            <div class="list-main">
+                                                <div class="list-title">@p.Name</div>
+                                                <div class="list-sub">@p.Phone</div>
+                                                <div class="list-hint">View profile</div>
+                                            </div>
+                                        </button>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+            }
+            else if (activeTab == "notes")
+            {
+                <div class="panel">
+                    <div class="panel-row">
+                        <h3 style="margin:0;">Doctor Notes</h3>
+                        <label class="toggle">
+                            <input type="checkbox" @bind="doctorCanSeeNotes" />
+                            <span>Show notes</span>
+                        </label>
+                    </div>
+
+                    @if (!doctorCanSeeNotes)
+                    {
+                        <p class="muted">Notes are hidden in this view.</p>
+                    }
+                    else if (_doctorNotes.Count == 0)
+                    {
+                        <p>No notes found.</p>
+                    }
+                    else
+                    {
+                        <div class="notes-toolbar">
+                            <label class="notes-filter-label" for="notes-patient-filter">Show notes for</label>
+                            <select id="notes-patient-filter" class="notes-filter-select" @bind="_notesPatientFilterId">
+                                <option value="">All patients</option>
+                                @foreach (var p in _patientsWithNotes.OrderBy(x => x.Name))
+                                {
+                                    <option value="@p.Id">@p.Name</option>
+                                }
+                            </select>
+                        </div>
+
+                        @if (!FilteredDoctorNotes.Any())
+                        {
+                            <p class="muted">No notes for this selection.</p>
+                        }
+                        else
+                        {
+                            @foreach (var group in NotesGroupedByPatient)
+                            {
+                                <h4 class="note-group-heading">@GetPatientName(group.Key)</h4>
+                                <ul class="note-list">
+                                    @foreach (var n in group.OrderByDescending(x => x.Date))
+                                    {
+                                        <li class="note-item-wrap">
+                                            <button type="button" class="note-item" @onclick="() => OpenNoteEditor(n)">
+                                                <div class="note-meta">
+                                                    <span>@n.Date.ToString("MMM d, yyyy")</span>
+                                                    <span class="dot">•</span>
+                                                    <span>Patient: @GetPatientName(n.PatientId)</span>
+                                                </div>
+                                                <div class="note-text">@n.Text</div>
+                                                <div class="note-open-hint">Click to edit</div>
+                                            </button>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                        }
+                    }
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (_editingNote is not null)
+{
+    <div class="modal-root" @onclick="CloseNoteEditor" role="dialog" aria-modal="true">
+        <div class="modal-panel" @onclick:stopPropagation="true">
+            <div class="modal-head">
+                <h3 class="modal-title">Edit note</h3>
+                <button type="button" class="modal-close" @onclick="CloseNoteEditor" title="Close">×</button>
+            </div>
+            <p class="modal-meta">@_editingNote.Date.ToString("MMM d, yyyy") · Patient: @GetPatientName(_editingNote.PatientId)</p>
+            <label class="modal-label" for="doc-note-body">Note</label>
+            <textarea id="doc-note-body" class="modal-textarea" rows="8" @bind="_editNoteText" @bind:event="oninput"></textarea>
+            <div class="modal-actions">
+                <button type="button" class="modal-primary" @onclick="SaveNote">Save</button>
+                @if (!string.IsNullOrWhiteSpace(_noteSavedMessage))
+                {
+                    <span class="modal-saved">@_noteSavedMessage</span>
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@if (_patientDetail is not null)
+{
+    <div class="modal-root" @onclick="ClosePatientDetail" role="dialog" aria-modal="true">
+        <div class="modal-panel modal-panel-wide" @onclick:stopPropagation="true">
+            <div class="modal-head">
+                <h3 class="modal-title">Patient information</h3>
+                <button type="button" class="modal-close" @onclick="ClosePatientDetail" title="Close">×</button>
+            </div>
+            <div class="modal-fields">
+                <div class="modal-field">
+                    <span class="modal-k">Name</span>
+                    <span class="modal-v">@_patientDetail.Name</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-k">Date of birth</span>
+                    <span class="modal-v">@_patientDetail.Dob.ToString("MMM d, yyyy")</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-k">Phone</span>
+                    <span class="modal-v">@_patientDetail.Phone</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-k">Email</span>
+                    <span class="modal-v">@_patientDetail.Email</span>
+                </div>
+                <div class="modal-field modal-field-block">
+                    <span class="modal-k">Allergies</span>
+                    <span class="modal-v">@(string.IsNullOrWhiteSpace(_patientDetail.Allergies) ? "—" : _patientDetail.Allergies)</span>
+                </div>
+                <div class="modal-field modal-field-block">
+                    <span class="modal-k">Medications</span>
+                    <span class="modal-v">@(string.IsNullOrWhiteSpace(_patientDetail.Medications) ? "—" : _patientDetail.Medications)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string activeTab = "calendar";
+    private bool doctorCanSeeNotes = true;
+
+    private MockClinicData.Doctor _doctor = MockClinicData.Doctors.First(d => d.Id == "d1");
+
+    private List<MockClinicData.Patient> _filteredPatients = new();
+    private List<MockClinicData.Note> _doctorNotes = new();
+    private string _notesPatientFilterId = "";
+    private string patientSearchTerm = "";
+
+    private MockClinicData.Note? _editingNote;
+    private string _editNoteText = "";
+    private string? _noteSavedMessage;
+
+    private MockClinicData.Patient? _patientDetail;
+
+    protected override void OnInitialized()
+    {
+        RefreshDoctorNotes();
+        ApplyPatientFilter();
+    }
+
+    protected override void OnParametersSet()
+    {
+        var tab = GetTabFromQuery();
+        if (tab is not null)
+        {
+            activeTab = tab;
+        }
+    }
+
+    private void OnPatientSearchChanged(string? term)
+    {
+        patientSearchTerm = term ?? "";
+        ApplyPatientFilter();
+    }
+
+    private void ApplyPatientFilter()
+    {
+        var term = (patientSearchTerm ?? "").Trim().ToLowerInvariant();
+        _filteredPatients = string.IsNullOrWhiteSpace(term)
+            ? Data.Patients.ToList()
+            : Data.Patients
+                .Where(p => p.Name.ToLowerInvariant().Contains(term))
+                .ToList();
+    }
+
+    private void RefreshDoctorNotes()
+    {
+        _doctorNotes = Data.NotesForDoctor(_doctor.Id);
+    }
+
+    private IEnumerable<MockClinicData.Note> FilteredDoctorNotes =>
+        string.IsNullOrEmpty(_notesPatientFilterId)
+            ? _doctorNotes
+            : _doctorNotes.Where(n => n.PatientId == _notesPatientFilterId);
+
+    private IEnumerable<IGrouping<string, MockClinicData.Note>> NotesGroupedByPatient =>
+        FilteredDoctorNotes
+            .GroupBy(n => n.PatientId)
+            .OrderBy(g => GetPatientName(g.Key), StringComparer.OrdinalIgnoreCase);
+
+    private IEnumerable<MockClinicData.Patient> _patientsWithNotes =>
+        Data.Patients.Where(p => _doctorNotes.Any(n => n.PatientId == p.Id)).ToList();
+
+    private void OpenNoteEditor(MockClinicData.Note n)
+    {
+        _patientDetail = null;
+        _noteSavedMessage = null;
+        _editingNote = n;
+        _editNoteText = n.Text;
+    }
+
+    private void CloseNoteEditor()
+    {
+        _editingNote = null;
+        _editNoteText = "";
+        _noteSavedMessage = null;
+    }
+
+    private void SaveNote()
+    {
+        if (_editingNote is null)
+        {
+            return;
+        }
+
+        Data.UpdateNote(_editingNote.Id, _editNoteText);
+        RefreshDoctorNotes();
+        _noteSavedMessage = "Saved.";
+    }
+
+    private void OpenPatientDetail(MockClinicData.Patient p)
+    {
+        CloseNoteEditor();
+        _patientDetail = Data.GetPatient(p.Id) ?? p;
+    }
+
+    private void ClosePatientDetail() => _patientDetail = null;
+
+    private string GetPatientName(string patientId)
+        => Data.GetPatient(patientId)?.Name ?? "Unknown";
+
+    private string DoctorDashboardTitle =>
+        MockClinicData.DashboardTitleFor(_doctor.Name);
+
+    private async Task SignOut()
+    {
+        await Session.SignOutAsync();
+        Nav.NavigateTo("/login", true);
+    }
+
+    private void SetTab(string tab)
+    {
+        if (activeTab == tab)
+        {
+            return;
+        }
+
+        activeTab = tab;
+        Nav.NavigateTo($"/dashboard/doctor?tab={Uri.EscapeDataString(tab)}", false, true);
+    }
+
+    private string? GetTabFromQuery()
+    {
+        try
+        {
+            var uri = new Uri(Nav.Uri);
+            var query = uri.Query.TrimStart('?');
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                return null;
+            }
+
+            foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var kv = part.Split('=', 2);
+                if (kv.Length == 2 && kv[0] == "tab")
+                {
+                    var tab = Uri.UnescapeDataString(kv[1]);
+                    return tab is "calendar" or "patients" or "notes" ? tab : null;
+                }
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private string GetTabClass(string tab) => tab == activeTab ? "tab active" : "tab";
+}
+
+@* lightweight inline styles *@
+<style>
+    .role-shell { max-width: 1100px; margin: 0 auto; }
+    .role-header { display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px; }
+    .role-actions { display:flex; align-items:center; gap: 12px; }
+    .role-badge { color:#555; font-size: 14px; }
+    .role-tabs { display:flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 14px 0; }
+    .tab { padding: 8px 14px; border: 1px solid #ddd; background: #fff; cursor:pointer; border-radius: 6px; }
+    .tab.active { border-color: #3b82f6; background: #eff6ff; }
+    .role-body { }
+    .panel { border:1px solid #e5e7eb; border-radius: 10px; padding: 14px; background: #fff; }
+    .field-input { width: 100%; padding: 8px 10px; border:1px solid #ddd; border-radius: 8px; }
+    .link-button { background: transparent; border: none; cursor:pointer; color:#2563eb; text-decoration: underline; }
+    .muted { color:#6b7280; }
+    .note-list { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap: 10px; }
+    .note-item-wrap { list-style:none; margin:0; padding:0; }
+    .note-item { width:100%; text-align:left; border:1px solid #e5e7eb; border-radius: 10px; padding: 12px; background: #fafafa; cursor:pointer; font:inherit; color:inherit; }
+    .note-item:hover { border-color:#93c5fd; background:#eff6ff; }
+    .note-meta { display:flex; gap: 8px; align-items:center; color:#6b7280; font-size: 13px; }
+    .dot { font-size: 18px; line-height: 0; }
+    .note-text { margin-top: 6px; white-space: pre-wrap; }
+    .note-open-hint { margin-top: 8px; font-size: 12px; font-weight: 600; color:#2563eb; }
+    .list { list-style:none; padding:0; margin: 0; display:flex; flex-direction:column; gap:10px; }
+    .list-item { border:1px solid #e5e7eb; border-radius: 10px; padding: 0; background:#fafafa; overflow:hidden; }
+    .list-item-btn { width:100%; text-align:left; border:none; background:transparent; cursor:pointer; font:inherit; padding: 12px; color:inherit; }
+    .list-item-btn:hover { background:#eff6ff; }
+    .list-title { font-weight: 700; }
+    .list-sub { color:#6b7280; font-size: 13px; margin-top: 4px; }
+    .list-hint { margin-top: 8px; font-size: 12px; font-weight: 600; color:#2563eb; }
+    .modal-root { position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box; background:rgba(15,23,42,0.45); backdrop-filter:blur(2px); }
+    .modal-panel { width:100%; max-width:440px; max-height:90vh; overflow:auto; border-radius:14px; background:#fff; padding:16px 18px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25); }
+    .modal-panel-wide { max-width:480px; }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+    .modal-title { margin:0; font-size:16px; font-weight:800; color:#111827; }
+    .modal-close { width:32px; height:32px; border-radius:8px; border:1px solid #e5e7eb; background:#fff; cursor:pointer; font-size:20px; line-height:1; color:#6b7280; }
+    .modal-close:hover { background:#f3f4f6; color:#111827; }
+    .modal-meta { margin:0 0 12px; font-size:13px; color:#6b7280; }
+    .modal-label { display:block; font-weight:600; color:#374151; margin-bottom:6px; font-size:13px; }
+    .modal-textarea { width:100%; box-sizing:border-box; padding:10px 12px; border:1px solid #d1d5db; border-radius:10px; font:inherit; resize:vertical; min-height:160px; }
+    .modal-textarea:focus { outline:none; border-color:#2563eb; box-shadow:0 0 0 3px rgba(37,99,235,0.2); }
+    .modal-actions { display:flex; align-items:center; gap:10px; margin-top:12px; flex-wrap:wrap; }
+    .modal-primary { padding:8px 14px; border-radius:8px; border:none; background:#2563eb; color:#fff; font-weight:700; cursor:pointer; }
+    .modal-primary:hover { background:#1d4ed8; }
+    .modal-saved { font-size:13px; color:#16a34a; font-weight:600; }
+    .modal-fields { display:flex; flex-direction:column; gap:12px; font-size:14px; }
+    .modal-field { display:grid; grid-template-columns:120px 1fr; gap:10px; align-items:start; }
+    .modal-field-block { grid-template-columns: 1fr; }
+    .modal-k { color:#6b7280; font-weight:600; }
+    .modal-v { color:#111827; word-break:break-word; white-space:pre-wrap; }
+    .panel-row { display:flex; justify-content:space-between; align-items:center; gap: 12px; }
+    .toggle { display:flex; gap: 8px; align-items:center; color:#374151; user-select:none; }
+    .notes-toolbar { margin-bottom: 14px; display:flex; flex-wrap:wrap; align-items:center; gap: 10px; }
+    .notes-filter-label { font-size: 13px; font-weight: 600; color:#374151; }
+    .notes-filter-select { padding: 8px 10px; border:1px solid #d1d5db; border-radius: 8px; font: inherit; min-width: 200px; background:#fff; }
+    .note-group-heading { margin: 16px 0 8px; font-size: 14px; font-weight: 800; color:#111827; }
+    .note-group-heading:first-of-type { margin-top: 0; }
+</style>

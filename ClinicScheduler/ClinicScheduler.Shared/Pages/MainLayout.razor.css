@@ -1,0 +1,30 @@
+.app-layout {
+    display: flex;
+    height: 100vh;
+    font-family: sans-serif;
+}
+
+.sidebar {
+    width: 240px;
+    background: #f4f4f4;
+    padding: 20px;
+    border-right: 1px solid #ddd;
+}
+
+.nav-item {
+    display: block;
+    margin: 12px 0;
+    color: #333;
+    text-decoration: none;
+    font-size: 16px;
+}
+
+.nav-item.active {
+    font-weight: bold;
+}
+
+.main-content {
+    flex: 1;
+    padding: 25px;
+    overflow-y: auto;
+}
