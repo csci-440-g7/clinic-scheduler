@@ -1,0 +1,66 @@
+@page "/2fa"
+@inject NavigationManager Nav
+@inject ClinicScheduler.Shared.Services.SessionState Session
+
+<h1>Two‑Factor Authentication</h1>
+
+<p>Enter the 4‑digit code sent to your email.</p>
+
+<input @bind="code" maxlength="4" />
+
+<button @onclick="VerifyCode">Verify</button>
+
+@if (errorMessage is not null)
+{
+    <p style="color:red">@errorMessage</p>
+}
+
+@code {
+    private string code = "";
+    private string? errorMessage;
+
+    private async Task VerifyCode()
+    {
+        if (code == "1234")
+        {
+            var role = GetRoleFromQuery() ?? Session.Role ?? "patient";
+
+            await Session.SetPreAuthAsync(role);
+            await Session.AuthenticateAsync();
+
+            Nav.NavigateTo($"/dashboard/{role}");
+        }
+        else
+        {
+            errorMessage = "Invalid code. Try again.";
+        }
+    }
+
+    private string? GetRoleFromQuery()
+    {
+        try
+        {
+            var uri = new Uri(Nav.Uri);
+            var query = uri.Query.TrimStart('?');
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                return null;
+            }
+
+            foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var kv = part.Split('=', 2);
+                if (kv.Length == 2 && kv[0] == "role")
+                {
+                    return Uri.UnescapeDataString(kv[1]);
+                }
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+}

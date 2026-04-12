@@ -1,0 +1,268 @@
+@page "/dashboard/staff"
+@inject NavigationManager Nav
+@inject ClinicScheduler.Shared.Services.SessionState Session
+@inject ClinicDataStore Data
+
+@using ClinicScheduler.Shared.Services
+
+<div class="role-shell">
+    <div class="role-header">
+        <h2>@StaffDashboardTitle</h2>
+        <div class="role-actions">
+            <span class="role-badge">Role: Staff</span>
+            <button class="link-button" @onclick="SignOut">Sign out</button>
+        </div>
+    </div>
+
+    @if (!Session.IsAuthenticated || Session.Role != "staff")
+    {
+        <p>You are not signed in as staff.</p>
+        <button @onclick="@(() => Nav.NavigateTo("/login", true))">Go to Login</button>
+    }
+    else
+    {
+        <div class="role-tabs">
+            <button class="@GetTabClass("calendar")" @onclick="@(() => SetTab("calendar"))">Calendar</button>
+            <button class="@GetTabClass("doctors")" @onclick="@(() => SetTab("doctors"))">Doctor Search</button>
+            <button class="@GetTabClass("patients")" @onclick="@(() => SetTab("patients"))">Patient Search</button>
+        </div>
+
+        <div class="role-body">
+            @if (activeTab == "calendar")
+            {
+                <CalendarView ViewerRole="staff" />
+            }
+            else if (activeTab == "doctors")
+            {
+                <div class="panel">
+                    <h3>Search Doctors</h3>
+                    <input class="field-input" placeholder="Search doctor name"
+                           value="@doctorSearchTerm"
+                           @oninput="(e) => OnDoctorSearchChanged(e.Value?.ToString())" />
+                    <div style="margin-top: 12px;">
+                        @if (_filteredDoctors.Count == 0)
+                        {
+                            <p class="muted">No matches.</p>
+                        }
+                        else
+                        {
+                            <ul class="list">
+                                @foreach (var d in _filteredDoctors)
+                                {
+                                    <li class="list-item">
+                                        <div class="list-title">@d.Name</div>
+                                        <div class="list-sub">@d.Specialty</div>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+            }
+            else if (activeTab == "patients")
+            {
+                <div class="panel">
+                    <h3>Search Patients</h3>
+                    <input class="field-input" placeholder="Search patient name"
+                           value="@patientSearchTerm"
+                           @oninput="(e) => OnPatientSearchChanged(e.Value?.ToString())" />
+                    <div style="margin-top: 12px;">
+                        @if (_filteredPatients.Count == 0)
+                        {
+                            <p class="muted">No matches.</p>
+                        }
+                        else
+                        {
+                            <ul class="list">
+                                @foreach (var p in _filteredPatients)
+                                {
+                                    <li class="list-item">
+                                        <button type="button" class="list-item-btn" @onclick="() => OpenPatientDetail(p)">
+                                            <div class="list-title">@p.Name</div>
+                                            <div class="list-sub">@p.Phone</div>
+                                            <div class="list-hint">View details</div>
+                                        </button>
+                                    </li>
+                                }
+                            </ul>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@if (_patientDetail is not null)
+{
+    <div class="modal-root" @onclick="ClosePatientDetail" role="dialog" aria-modal="true">
+        <div class="modal-panel modal-panel-wide" @onclick:stopPropagation="true">
+            <div class="modal-head">
+                <h3 class="modal-title">Patient information</h3>
+                <button type="button" class="modal-close" @onclick="ClosePatientDetail" title="Close">×</button>
+            </div>
+            <div class="modal-fields">
+                <div class="modal-field">
+                    <span class="modal-k">Name</span>
+                    <span class="modal-v">@_patientDetail.Name</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-k">Date of birth</span>
+                    <span class="modal-v">@_patientDetail.Dob.ToString("MMM d, yyyy")</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-k">Phone</span>
+                    <span class="modal-v">@_patientDetail.Phone</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-k">Email</span>
+                    <span class="modal-v">@_patientDetail.Email</span>
+                </div>
+                <div class="modal-field modal-field-block">
+                    <span class="modal-k">Allergies</span>
+                    <span class="modal-v">@(string.IsNullOrWhiteSpace(_patientDetail.Allergies) ? "—" : _patientDetail.Allergies)</span>
+                </div>
+                <div class="modal-field modal-field-block">
+                    <span class="modal-k">Medications</span>
+                    <span class="modal-v">@(string.IsNullOrWhiteSpace(_patientDetail.Medications) ? "—" : _patientDetail.Medications)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string activeTab = "calendar";
+
+    private List<MockClinicData.Doctor> _filteredDoctors = new();
+    private List<MockClinicData.Patient> _filteredPatients = new();
+
+    private string doctorSearchTerm = "";
+    private string patientSearchTerm = "";
+
+    private MockClinicData.Patient? _patientDetail;
+
+    protected override void OnInitialized()
+    {
+        _filteredDoctors = MockClinicData.Doctors.ToList();
+        _filteredPatients = Data.Patients.ToList();
+    }
+
+    private void OpenPatientDetail(MockClinicData.Patient p)
+    {
+        _patientDetail = Data.GetPatient(p.Id) ?? p;
+    }
+
+    private void ClosePatientDetail() => _patientDetail = null;
+
+    protected override void OnParametersSet()
+    {
+        var tab = GetTabFromQuery();
+        if (tab is not null)
+        {
+            activeTab = tab;
+        }
+    }
+
+    private void OnDoctorSearchChanged(string? term)
+    {
+        doctorSearchTerm = term ?? "";
+        var t = doctorSearchTerm.Trim().ToLowerInvariant();
+        _filteredDoctors = string.IsNullOrWhiteSpace(t)
+            ? MockClinicData.Doctors.ToList()
+            : MockClinicData.Doctors.Where(d => d.Name.ToLowerInvariant().Contains(t)).ToList();
+    }
+
+    private void OnPatientSearchChanged(string? term)
+    {
+        patientSearchTerm = term ?? "";
+        var t = patientSearchTerm.Trim().ToLowerInvariant();
+        _filteredPatients = string.IsNullOrWhiteSpace(t)
+            ? Data.Patients.ToList()
+            : Data.Patients.Where(p => p.Name.ToLowerInvariant().Contains(t)).ToList();
+    }
+
+    private async Task SignOut()
+    {
+        await Session.SignOutAsync();
+        Nav.NavigateTo("/login", true);
+    }
+
+    private void SetTab(string tab)
+    {
+        if (activeTab == tab)
+        {
+            return;
+        }
+
+        activeTab = tab;
+        Nav.NavigateTo($"/dashboard/staff?tab={Uri.EscapeDataString(tab)}", false, true);
+    }
+
+    private string? GetTabFromQuery()
+    {
+        try
+        {
+            var uri = new Uri(Nav.Uri);
+            var query = uri.Query.TrimStart('?');
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                return null;
+            }
+
+            foreach (var part in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+            {
+                var kv = part.Split('=', 2);
+                if (kv.Length == 2 && kv[0] == "tab")
+                {
+                    var tab = Uri.UnescapeDataString(kv[1]);
+                    return tab is "calendar" or "doctors" or "patients" ? tab : null;
+                }
+            }
+
+            return null;
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private string GetTabClass(string tab) => tab == activeTab ? "tab active" : "tab";
+
+    private string StaffDashboardTitle =>
+        MockClinicData.DashboardTitleFor(MockClinicData.DemoStaffDisplayName);
+}
+
+<style>
+    .role-shell { max-width: 1100px; margin: 0 auto; }
+    .role-header { display:flex; align-items:center; justify-content:space-between; margin-bottom: 12px; }
+    .role-actions { display:flex; align-items:center; gap: 12px; }
+    .role-badge { color:#555; font-size: 14px; }
+    .role-tabs { display:flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 14px 0; }
+    .tab { padding: 8px 14px; border: 1px solid #ddd; background: #fff; cursor:pointer; border-radius: 6px; }
+    .tab.active { border-color: #3b82f6; background: #eff6ff; }
+    .panel { border:1px solid #e5e7eb; border-radius: 10px; padding: 14px; background: #fff; }
+    .field-input { width: 100%; padding: 8px 10px; border:1px solid #ddd; border-radius: 8px; box-sizing: border-box; }
+    .link-button { background: transparent; border: none; cursor:pointer; color:#2563eb; text-decoration: underline; }
+    .muted { color:#6b7280; }
+    .list { list-style:none; padding:0; margin: 0; display:flex; flex-direction:column; gap:10px; }
+    .list-item { border:1px solid #e5e7eb; border-radius: 10px; padding: 0; background:#fafafa; overflow:hidden; }
+    .list-item-btn { width:100%; text-align:left; border:none; background:transparent; cursor:pointer; font:inherit; padding: 12px; color:inherit; }
+    .list-item-btn:hover { background:#eff6ff; }
+    .list-title { font-weight: 700; }
+    .list-sub { color:#6b7280; font-size: 13px; margin-top: 4px; }
+    .list-hint { margin-top: 8px; font-size: 12px; font-weight: 600; color:#2563eb; }
+    .modal-root { position:fixed; inset:0; z-index:1000; display:flex; align-items:center; justify-content:center; padding:20px; box-sizing:border-box; background:rgba(15,23,42,0.45); backdrop-filter:blur(2px); }
+    .modal-panel { width:100%; max-width:440px; max-height:90vh; overflow:auto; border-radius:14px; background:#fff; padding:16px 18px; box-shadow:0 25px 50px -12px rgba(0,0,0,0.25); }
+    .modal-panel-wide { max-width:480px; }
+    .modal-head { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:8px; }
+    .modal-title { margin:0; font-size:16px; font-weight:800; color:#111827; }
+    .modal-close { width:32px; height:32px; border-radius:8px; border:1px solid #e5e7eb; background:#fff; cursor:pointer; font-size:20px; line-height:1; color:#6b7280; }
+    .modal-close:hover { background:#f3f4f6; color:#111827; }
+    .modal-fields { display:flex; flex-direction:column; gap:12px; font-size:14px; }
+    .modal-field { display:grid; grid-template-columns:120px 1fr; gap:10px; align-items:start; }
+    .modal-field-block { grid-template-columns: 1fr; }
+    .modal-k { color:#6b7280; font-weight:600; }
+    .modal-v { color:#111827; word-break:break-word; white-space:pre-wrap; }
+</style>
