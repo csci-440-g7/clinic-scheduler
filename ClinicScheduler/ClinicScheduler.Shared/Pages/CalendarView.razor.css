@@ -1,0 +1,227 @@
+.calendar-shell {
+    position: relative;
+    display: flex;
+    flex-direction: row;
+    gap: 14px;
+    align-items: flex-start;
+    width: 100%;
+    max-width: 100%;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+.week-panel {
+    flex: 1 1 0;
+    min-width: 0;
+    border: 1px solid #e5e7eb;
+    border-radius: 12px;
+    background: #fff;
+    padding: 12px;
+    overflow-x: auto;
+    overflow-y: visible;
+    box-sizing: border-box;
+}
+
+.week-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.week-title {
+    font-weight: 900;
+    color: #111827;
+    text-align: center;
+}
+
+.nav-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    border: 1px solid #e5e7eb;
+    background: #fff;
+    cursor: pointer;
+    font-size: 18px;
+    color: #374151;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-book {
+    margin-left: auto;
+    padding: 7px 14px;
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.btn-book:hover {
+    background: #1d4ed8;
+}
+
+.week-grid {
+    display: flex;
+    gap: 0;
+    align-items: stretch;
+    width: 100%;
+    min-width: 0;
+}
+
+.time-col {
+    flex: 0 0 48px;
+    width: 48px;
+    min-width: 48px;
+    display: flex;
+    flex-direction: column;
+}
+
+.time-header {
+    height: 54px;
+}
+
+.time-label {
+    height: 40px;
+    font-size: 12px;
+    color: #6b7280;
+    display: flex;
+    justify-content: flex-end;
+    align-items: flex-start;
+    padding-top: 3px;
+    padding-right: 6px;
+    box-sizing: border-box;
+}
+
+.day-col {
+    flex: 1 1 0;
+    min-width: 0;
+    border-left: 1px solid #f1f5f9;
+}
+
+.day-header {
+    padding: 6px 6px 2px 6px;
+    text-align: center;
+    border-bottom: 1px solid #f1f5f9;
+    height: 54px;
+    box-sizing: border-box;
+}
+
+.day-name {
+    font-weight: 900;
+    color: #374151;
+}
+
+.day-date {
+    font-size: 12px;
+    color: #6b7280;
+}
+
+.day-body {
+    position: relative;
+    background: repeating-linear-gradient(
+        to bottom,
+        rgba(148, 163, 184, 0.35) 0px,
+        rgba(148, 163, 184, 0.35) 1px,
+        transparent 1px,
+        transparent 40px
+    );
+}
+
+.appt-card {
+    position: absolute;
+    left: 6px;
+    right: 6px;
+    border-radius: 10px;
+    padding: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    overflow: hidden;
+    box-sizing: border-box;
+    color: #fff;
+    cursor: pointer;
+    font: inherit;
+    text-align: left;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    min-height: 0;
+}
+
+.appt-card:focus-visible {
+    outline: 2px solid #fff;
+    outline-offset: 2px;
+    z-index: 2;
+}
+
+.appt-card.selected {
+    box-shadow: 0 0 0 2px #fff, 0 0 0 4px rgba(30, 64, 175, 0.95);
+    z-index: 2;
+}
+
+.appt-title {
+    font-size: 12px;
+    font-weight: 800;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.appt-time {
+    margin-top: 2px;
+    font-size: 11px;
+    opacity: 0.95;
+}
+
+.appt-sub {
+    margin-top: 4px;
+    font-size: 11px;
+    opacity: 0.95;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    overflow: hidden;
+}
+
+.appt-hint {
+    margin-top: auto;
+    padding-top: 4px;
+    font-size: 10px;
+    font-weight: 700;
+    opacity: 0.9;
+    letter-spacing: 0.02em;
+}
+
+.appt-medical { background: #2563eb; }
+.appt-lab     { background: #16a34a; }
+.appt-intake  { background: #f97316; }
+.appt-admin   { background: #6d28d9; }
+.appt-default { background: #64748b; }
+
+.appt-pending {
+    opacity: 0.75;
+    background-image: repeating-linear-gradient(
+        45deg,
+        transparent,
+        transparent 5px,
+        rgba(255, 255, 255, 0.18) 5px,
+        rgba(255, 255, 255, 0.18) 10px
+    );
+}
+
+.appt-status-badge {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    background: rgba(255, 255, 255, 0.28);
+    border-radius: 4px;
+    padding: 1px 5px;
+    margin-bottom: 3px;
+    align-self: flex-start;
+}

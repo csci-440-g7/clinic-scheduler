@@ -17,7 +17,7 @@ namespace ClinicScheduler.Infrastructure.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.3")
+                .HasAnnotation("ProductVersion", "10.0.4")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -166,6 +166,9 @@ namespace ClinicScheduler.Infrastructure.Migrations
                     b.Property<int>("Capacity")
                         .HasColumnType("integer");
 
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<string>("Description")
                         .HasColumnType("text");
 
@@ -175,6 +178,9 @@ namespace ClinicScheduler.Infrastructure.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("Id");
 
@@ -266,7 +272,7 @@ namespace ClinicScheduler.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateOnly?>("EndDate")
+                    b.Property<DateOnly>("EndDate")
                         .HasColumnType("date");
 
                     b.Property<int>("FrequencyPerWeek")
@@ -297,7 +303,7 @@ namespace ClinicScheduler.Infrastructure.Migrations
                         {
                             t.HasCheckConstraint("CK_TreatmentPlan_Frequency", "\"FrequencyPerWeek\" IN  (2, 3, 4)");
 
-                            t.HasCheckConstraint("CK_TreatmentPlan_TotalDays", "\"TotalDays\" IN (20, 30, 50)");
+                            t.HasCheckConstraint("CK_TreatmentPlan_TotalDays", "\"TotalDays\" IN (20, 30, 40, 50)");
                         });
                 });
 
@@ -308,6 +314,9 @@ namespace ClinicScheduler.Infrastructure.Migrations
 
                     b.Property<int>("TherapyTypeId")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.HasKey("TreatmentPlanId", "TherapyTypeId");
 

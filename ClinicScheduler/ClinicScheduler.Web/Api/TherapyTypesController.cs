@@ -20,64 +20,29 @@ public class TherapyTypesController : ControllerBase
     public async Task<ActionResult<IReadOnlyList<TherapyTypeDto>>> GetAll(CancellationToken ct)
     {
         var types = await _repository.GetAllAsync(ct);
-
-        var result = types.Select(static type => new TherapyTypeDto
-        {
-            Id = type.Id,
-            Name = type.Name,
-            Description = type.Description,
-            Specialty = type.Specialty,
-            ColorCode = type.ColorCode,
-            CreatedAt = type.CreatedAt,
-            UpdatedAt = type.UpdatedAt
-        }).ToList();
-
-        return Ok(result);
+        return Ok(types.Select(static t => MapToDto(t)).ToList());
     }
 
     [HttpGet("{id:int}")]
     public async Task<ActionResult<TherapyTypeDto>> GetById(int id, CancellationToken ct)
     {
         var type = await _repository.GetByIdAsync(id, ct);
-        if (type is null) return NotFound();
-
-        return Ok(new TherapyTypeDto
-        {
-            Id = type.Id,
-            Name = type.Name,
-            Description = type.Description,
-            Specialty = type.Specialty,
-            ColorCode = type.ColorCode,
-            CreatedAt = type.CreatedAt,
-            UpdatedAt = type.UpdatedAt
-        });
+        return type is null ? NotFound() : Ok(MapToDto(type));
     }
 
     [HttpPost]
     public async Task<ActionResult<TherapyTypeDto>> Create(CreateTherapyTypeRequest request, CancellationToken ct)
     {
-        var therapyType = new TherapyType
+        try
         {
-            Name = request.Name,
-            Description = request.Description,
-            Specialty = request.Specialty,
-            ColorCode = request.ColorCode
-        };
-
-        var created = await _repository.AddAsync(therapyType, ct);
-
-        var result = new TherapyTypeDto
+            var therapyType = new TherapyType(request.Name, request.Description, request.Specialty, request.ColorCode);
+            var created = await _repository.AddAsync(therapyType, ct);
+            return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
+        }
+        catch (ArgumentException ex)
         {
-            Id = created.Id,
-            Name = created.Name,
-            Description = created.Description,
-            Specialty = created.Specialty,
-            ColorCode = created.ColorCode,
-            CreatedAt = created.CreatedAt,
-            UpdatedAt = created.UpdatedAt
-        };
-
-        return CreatedAtAction(nameof(GetById), new { id = created.Id }, result);
+            return BadRequest(ex.Message);
+        }
     }
 
     [HttpPut("{id:int}")]
@@ -86,10 +51,14 @@ public class TherapyTypesController : ControllerBase
         var existing = await _repository.GetByIdAsync(id, ct);
         if (existing is null) return NotFound();
 
-        existing.Name = request.Name;
-        existing.Description = request.Description;
-        existing.Specialty = request.Specialty;
-        existing.ColorCode = request.ColorCode;
+        try
+        {
+            existing.UpdateDetails(request.Name, request.Description, request.Specialty, request.ColorCode);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(ex.Message);
+        }
 
         await _repository.UpdateAsync(existing, ct);
         return NoContent();
@@ -104,4 +73,15 @@ public class TherapyTypesController : ControllerBase
         await _repository.DeleteAsync(type, ct);
         return NoContent();
     }
+
+    private static TherapyTypeDto MapToDto(TherapyType type) => new()
+    {
+        Id = type.Id,
+        Name = type.Name,
+        Description = type.Description,
+        Specialty = type.Specialty,
+        ColorCode = type.ColorCode,
+        CreatedAt = type.CreatedAt,
+        UpdatedAt = type.UpdatedAt
+    };
 }

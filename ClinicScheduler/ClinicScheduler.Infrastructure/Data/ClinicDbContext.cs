@@ -34,11 +34,11 @@ public class ClinicDbContext : DbContext
                 "CK_TreatmentPlan_Frequency",
                 "\"FrequencyPerWeek\" IN  (2, 3, 4)"));
         
-        // Treatment plan validation: total days must be 20, 30, or 50
+        // Treatment plan validation: total days must be 20, 30, 40, or 50
         modelBuilder.Entity<TreatmentPlan>()
             .ToTable(t => t.HasCheckConstraint(
                 "CK_TreatmentPlan_TotalDays",
-                "\"TotalDays\" IN (20, 30, 50)"));
+                "\"TotalDays\" IN (20, 30, 40, 50)"));
 
         // Ensure email uniqueness
         modelBuilder.Entity<Patient>()

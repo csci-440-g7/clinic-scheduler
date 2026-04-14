@@ -1,5 +1,6 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using ClinicScheduler.Core.Services;
 using ClinicScheduler.Web.Components;
 using ClinicScheduler.Shared.Services;
 using ClinicScheduler.Web.Services;
@@ -13,7 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Register the Database Context
 var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrWhiteSpace(defaultConnectionString))
+if (string.IsNullOrWhiteSpace(defaultConnectionString) && !builder.Environment.IsEnvironment("Testing"))
 {
     throw new InvalidOperationException(
         "The connection string 'DefaultConnection' is missing or empty. Please configure a valid connection string in appsettings.json or environment configuration.");
@@ -24,6 +25,10 @@ builder.Services.AddDbContext<ClinicDbContext>(options =>
 
 // Register the repositories
 builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+
+// Register business logic services
+builder.Services.AddScoped<AppointmentSchedulingService>();
+builder.Services.AddScoped<MissedAppointmentService>();
 
 // Add API Controllers
 builder.Services.AddControllers()
@@ -64,12 +69,22 @@ builder.Services.AddOpenApi(options =>
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddInteractiveWebAssemblyComponents();
+builder.Services.AddControllers();
 
 // Add device-specific services used by the ClinicScheduler.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
+builder.Services.AddScoped<SessionState>();
+builder.Services.AddScoped<ClinicDataStore>();
 
 builder.Services.AddMudServices();
 var app = builder.Build();
+
+// Auto-apply EF migrations on startup (safe to run repeatedly; no-ops when up-to-date)
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
+    db.Database.Migrate();
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
@@ -92,7 +107,10 @@ else
 }
 
 app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-app.UseHttpsRedirection();
+
+// HTTPS termination is handled by the load balancer in production; skip redirect in container
+if (!app.Environment.IsProduction())
+    app.UseHttpsRedirection();
 
 app.UseAntiforgery();
 

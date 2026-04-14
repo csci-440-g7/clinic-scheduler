@@ -1,0 +1,38 @@
+@page "/login"
+@inject NavigationManager Nav
+@inject ClinicScheduler.Shared.Services.SessionState Session
+
+<h1>Login</h1>
+
+<div>
+    <input @bind="email" placeholder="Email" />
+</div>
+
+<div>
+    <input @bind="password" placeholder="Password" type="password" />
+</div>
+
+<div style="margin-top: 12px;">
+    <label>Role</label>
+    <select @bind="role">
+        <option value="patient">Patient</option>
+        <option value="doctor">Doctor</option>
+        <option value="staff">Staff</option>
+    </select>
+</div>
+
+<button @onclick="HandleLogin">Login</button>
+
+<p><a href="#">Forgot password?</a></p>
+
+@code {
+    private string email = "";
+    private string password = "";
+    private string role = "patient";
+
+    private async Task HandleLogin()
+    {
+        await Session.SetPreAuthAsync(role);
+        Nav.NavigateTo($"/2fa?role={Uri.EscapeDataString(role)}");
+    }
+}

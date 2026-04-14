@@ -1,0 +1,40 @@
+@page "/calendar"
+@inject ClinicScheduler.Shared.Services.SessionState Session
+@inject NavigationManager Nav
+
+@using ClinicScheduler.Shared.Services
+@using static ClinicScheduler.Shared.Services.MockClinicData
+
+<h1>Appointments · @ClinicShortName</h1>
+
+@if (!Session.IsAuthenticated)
+{
+    <p>Redirecting...</p>
+}
+else
+{
+    @if (Session.Role == "patient")
+    {
+        <CalendarView ViewerRole="patient" PatientId="p1" />
+    }
+    else if (Session.Role == "doctor")
+    {
+        <CalendarView ViewerRole="doctor" DoctorId="d1" />
+    }
+    else
+    {
+        <CalendarView ViewerRole="staff" />
+    }
+}
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        await Session.EnsureLoadedAsync();
+
+        if (!Session.IsAuthenticated)
+        {
+            Nav.NavigateTo("/login", true);
+        }
+    }
+}
