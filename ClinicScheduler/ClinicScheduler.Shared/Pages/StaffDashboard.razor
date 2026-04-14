@@ -185,7 +185,7 @@
     private async Task SignOut()
     {
         await Session.SignOutAsync();
-        Nav.NavigateTo("/login", true);
+        Nav.NavigateTo("/login");
     }
 
     private void SetTab(string tab)

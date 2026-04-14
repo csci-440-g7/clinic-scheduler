@@ -1,0 +1,257 @@
+@using ClinicScheduler.Shared.Services
+@inject ClinicDataStore Data
+
+<div class="calendar-sidebar">
+    <div class="mini-month">
+        <div class="month-nav">
+            <button class="nav-btn" title="Previous month" @onclick="PrevMonth">‹</button>
+            <div class="month-title">@_currentMonth.ToString("MMMM yyyy")</div>
+            <button class="nav-btn" title="Next month" @onclick="NextMonth">›</button>
+        </div>
+
+        <div class="dow-row">
+            @foreach (var d in _dayLabels)
+            {
+                <div class="dow">@d</div>
+            }
+        </div>
+
+        <div class="mini-grid">
+            @for (int i = 0; i < 42; i++)
+            {
+                var cellDate = _miniGridStart.AddDays(i);
+                var outside = cellDate.Month != _currentMonth.Month;
+                var inWeek = cellDate.Date >= WeekStart.Date && cellDate.Date < WeekStart.Date.AddDays(7);
+                var selected = cellDate.Date == FocusedDate.Date;
+
+                <button class="mini-day @(outside ? "outside" : "") @(inWeek ? "in-week" : "") @(selected ? "selected" : "")"
+                        type="button"
+                        @onclick="() => OnDayClicked(cellDate)">
+                    @cellDate.Day
+                </button>
+            }
+        </div>
+    </div>
+
+    <div class="sidebar-lists">
+        @if (ViewerRole == "staff")
+        {
+            var pending = PendingRequests;
+            <section class="sidebar-section">
+                <h4 class="sidebar-heading sidebar-heading-requests">
+                    Pending Requests
+                    @if (pending.Count > 0)
+                    {
+                        <span class="sidebar-pending-badge">@pending.Count</span>
+                    }
+                </h4>
+                @if (pending.Count == 0)
+                {
+                    <p class="sidebar-empty">No pending requests.</p>
+                }
+                else
+                {
+                    <ul class="sidebar-ul">
+                        @foreach (var a in pending)
+                        {
+                            var patient = Data.GetPatient(a.PatientId);
+                            var doctor  = MockClinicData.Doctors.FirstOrDefault(d => d.Id == a.DoctorId);
+                            <li>
+                                <div class="sidebar-req-card">
+                                    <div class="sidebar-req-meta">
+                                        <span class="sidebar-req-patient">@(patient?.Name ?? "Unknown patient")</span>
+                                        <span class="sidebar-req-detail">@a.Start.ToString("MMM d") · @FormatRange(a)</span>
+                                        <span class="sidebar-req-detail">@(doctor?.Name ?? "Unknown doctor")</span>
+                                        @if (!string.IsNullOrWhiteSpace(a.MeetingNotes))
+                                        {
+                                            <span class="sidebar-req-reason">@a.MeetingNotes</span>
+                                        }
+                                    </div>
+                                    <div class="sidebar-req-actions">
+                                        <button type="button" class="sidebar-req-confirm" @onclick="() => ConfirmRequest(a)">Confirm</button>
+                                        <button type="button" class="sidebar-req-decline" @onclick="() => DeclineRequest(a)">Decline</button>
+                                    </div>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+        }
+
+        <section class="sidebar-section">
+            <h4 class="sidebar-heading">Recent</h4>
+            @if (RecentAppointments.Count == 0)
+            {
+                <p class="sidebar-empty">No past appointments.</p>
+            }
+            else
+            {
+                <ul class="sidebar-ul">
+                    @foreach (var a in RecentAppointments)
+                    {
+                        <li>
+                            <button type="button" class="sidebar-appt @(SelectedId == a.Id ? "active" : "")"
+                                    @onclick="() => OnAppointmentSelected.InvokeAsync(a)">
+                                <span class="sidebar-appt-title">@a.Title</span>
+                                <span class="sidebar-appt-when">@a.Start.ToString("MMM d") · @FormatRange(a)</span>
+                                <span class="sidebar-appt-sub">@Subtitle(a)</span>
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section class="sidebar-section">
+            <h4 class="sidebar-heading">Upcoming</h4>
+            @if (UpcomingAppointments.Count == 0)
+            {
+                <p class="sidebar-empty">Nothing scheduled ahead.</p>
+            }
+            else
+            {
+                <ul class="sidebar-ul">
+                    @foreach (var a in UpcomingAppointments)
+                    {
+                        <li>
+                            <button type="button" class="sidebar-appt @(SelectedId == a.Id ? "active" : "")"
+                                    @onclick="() => OnAppointmentSelected.InvokeAsync(a)">
+                                <span class="sidebar-appt-title">@a.Title</span>
+                                <span class="sidebar-appt-when">@a.Start.ToString("MMM d") · @FormatRange(a)</span>
+                                <span class="sidebar-appt-sub">@Subtitle(a)</span>
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+
+        <section class="sidebar-section">
+            <h4 class="sidebar-heading">Follow-ups</h4>
+            @if (FollowUpAppointments.Count == 0)
+            {
+                <p class="sidebar-empty">No follow-up visits on file.</p>
+            }
+            else
+            {
+                <ul class="sidebar-ul">
+                    @foreach (var a in FollowUpAppointments)
+                    {
+                        <li>
+                            <button type="button" class="sidebar-appt @(SelectedId == a.Id ? "active" : "")"
+                                    @onclick="() => OnAppointmentSelected.InvokeAsync(a)">
+                                <span class="sidebar-appt-title">@a.Title</span>
+                                <span class="sidebar-appt-when">@a.Start.ToString("MMM d") · @FormatRange(a)</span>
+                                <span class="sidebar-appt-sub">@Subtitle(a)</span>
+                            </button>
+                        </li>
+                    }
+                </ul>
+            }
+        </section>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string ViewerRole { get; set; } = "staff";
+    [Parameter] public string? PatientId { get; set; }
+    [Parameter] public string? DoctorId { get; set; }
+    [Parameter] public DateTime WeekStart { get; set; }
+    [Parameter] public DateTime FocusedDate { get; set; }
+    [Parameter] public string? SelectedId { get; set; }
+    [Parameter] public EventCallback<DateTime> OnDateSelected { get; set; }
+    [Parameter] public EventCallback<MockClinicData.Appointment> OnAppointmentSelected { get; set; }
+    [Parameter] public EventCallback OnAppointmentStatusChanged { get; set; }
+
+    private DateTime _currentMonth;
+
+    private readonly string[] _dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+    private DateTime _miniGridStart => MiniGridStart(_currentMonth);
+
+    protected override void OnInitialized() =>
+        _currentMonth = new DateTime(WeekStart.Year, WeekStart.Month, 1);
+
+    protected override void OnParametersSet()
+    {
+        // Sync mini-calendar when week navigation crosses a month boundary.
+        var weekMonth = new DateTime(WeekStart.Year, WeekStart.Month, 1);
+        if (weekMonth != _currentMonth && FocusedDate.Month == WeekStart.Month)
+            _currentMonth = weekMonth;
+    }
+
+    private void PrevMonth() => _currentMonth = _currentMonth.AddMonths(-1);
+    private void NextMonth() => _currentMonth = _currentMonth.AddMonths(1);
+
+    private void OnDayClicked(DateTime date)
+    {
+        _currentMonth = new DateTime(date.Year, date.Month, 1);
+        OnDateSelected.InvokeAsync(date);
+    }
+
+    private IEnumerable<MockClinicData.Appointment> ForViewer()
+    {
+        IEnumerable<MockClinicData.Appointment> q = Data.Appointments;
+        return ViewerRole switch
+        {
+            "patient" when !string.IsNullOrWhiteSpace(PatientId) => q.Where(a => a.PatientId == PatientId),
+            "doctor"  when !string.IsNullOrWhiteSpace(DoctorId)  => q.Where(a => a.DoctorId  == DoctorId),
+            "staff"                                               => q,
+            _                                                     => Enumerable.Empty<MockClinicData.Appointment>()
+        };
+    }
+
+    private List<MockClinicData.Appointment> PendingRequests =>
+        ViewerRole == "staff"
+            ? Data.Appointments.Where(a => a.Status == "pending").OrderBy(a => a.Start).ToList()
+            : [];
+
+    private async Task ConfirmRequest(MockClinicData.Appointment a)
+    {
+        Data.UpdateAppointmentStatus(a.Id, "confirmed");
+        await OnAppointmentStatusChanged.InvokeAsync();
+    }
+
+    private async Task DeclineRequest(MockClinicData.Appointment a)
+    {
+        Data.UpdateAppointmentStatus(a.Id, "declined");
+        await OnAppointmentStatusChanged.InvokeAsync();
+    }
+
+    private List<MockClinicData.Appointment> RecentAppointments =>
+        ForViewer().Where(a => a.End < DateTime.Now && a.Status != "pending").OrderByDescending(a => a.Start).Take(5).ToList();
+
+    private List<MockClinicData.Appointment> UpcomingAppointments =>
+        ForViewer().Where(a => a.Start > DateTime.Now && a.Status != "pending").OrderBy(a => a.Start).Take(5).ToList();
+
+    private List<MockClinicData.Appointment> FollowUpAppointments =>
+        ForViewer()
+            .Where(a => a.Title.Contains("follow", StringComparison.OrdinalIgnoreCase) && a.Start > DateTime.Now && a.Status != "pending")
+            .OrderBy(a => a.Start).Take(5).ToList();
+
+    private string Subtitle(MockClinicData.Appointment a)
+    {
+        var patient = Data.GetPatient(a.PatientId)
+            ?? new MockClinicData.Patient("?", "Unknown", DateTime.Today, "", "", "", "");
+        var doctor = MockClinicData.Doctors.FirstOrDefault(d => d.Id == a.DoctorId)
+            ?? new MockClinicData.Doctor("?", "Unknown", "");
+        return ViewerRole switch
+        {
+            "patient" => doctor.Name,
+            "doctor"  => patient.Name,
+            "staff"   => $"{patient.Name} · {doctor.Name}",
+            _         => ""
+        };
+    }
+
+    private static string FormatRange(MockClinicData.Appointment a) =>
+        $"{a.Start:h:mm tt} – {a.End:h:mm tt}";
+
+    private static DateTime MiniGridStart(DateTime month)
+    {
+        var first = new DateTime(month.Year, month.Month, 1);
+        var offset = ((int)first.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
+        return first.AddDays(-offset);
+    }
+}

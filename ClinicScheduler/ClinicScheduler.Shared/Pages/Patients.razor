@@ -1,25 +1,239 @@
 @page "/patients"
+@inject ClinicScheduler.Shared.Services.ClinicDataStore Data
+@using ClinicScheduler.Shared.Services
 
-<h1>Patients</h1>
+<div class="patients-shell">
+    <div class="patients-header">
+        <h1>Patients</h1>
+        <button class="btn-add" type="button" @onclick="OpenAddForm">+ Add Patient</button>
+    </div>
 
-<input placeholder="Search patient" class="search-box" />
+    <input placeholder="Search patients" class="field-input" value="@_search"
+           @oninput="(e) => OnSearchChanged(e.Value?.ToString())" />
 
-<h3>M</h3>
-<ul>
-    <li>Marcus Webb</li>
-</ul>
-
-<h3>O–V</h3>
-<ul>
-    <li>Diane Okonkwo</li>
-    <li>Elena Vargas</li>
-    <li>Kevin Morales</li>
-</ul>
-
-<div class="profile-preview">
-    <h4>Profile preview</h4>
-    <p>Name: Marcus Webb</p>
-    <p>DOB: 07/03/1990</p>
-    <p>Phone: 555-1202</p>
-    <p>Email: mwebb@example.com</p>
+    @if (_filtered.Count == 0)
+    {
+        <p class="muted" style="margin-top:16px;">No patients found.</p>
+    }
+    else
+    {
+        @foreach (var group in _grouped)
+        {
+            <h3 class="alpha-heading">@group.Key</h3>
+            <ul class="list">
+                @foreach (var p in group)
+                {
+                    <li class="list-item">
+                        <button type="button" class="list-item-btn" @onclick="() => OpenDetail(p)">
+                            <div class="list-title">@p.Name</div>
+                            <div class="list-sub">@p.Phone · @p.Email</div>
+                            <div class="list-hint">View details</div>
+                        </button>
+                    </li>
+                }
+            </ul>
+        }
+    }
 </div>
+
+@if (_detail is not null)
+{
+    <div class="modal-root" @onclick="CloseDetail" role="dialog" aria-modal="true">
+        <div class="modal-panel" @onclick:stopPropagation="true">
+            <div class="modal-head">
+                <h3 class="modal-title">Patient information</h3>
+                <button type="button" class="modal-close" @onclick="CloseDetail" title="Close">×</button>
+            </div>
+            <div class="modal-fields">
+                <div class="modal-field">
+                    <span class="modal-k">Name</span>
+                    <span class="modal-v">@_detail.Name</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-k">Date of birth</span>
+                    <span class="modal-v">@_detail.Dob.ToString("MMM d, yyyy")</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-k">Phone</span>
+                    <span class="modal-v">@_detail.Phone</span>
+                </div>
+                <div class="modal-field">
+                    <span class="modal-k">Email</span>
+                    <span class="modal-v">@_detail.Email</span>
+                </div>
+                <div class="modal-field modal-field-block">
+                    <span class="modal-k">Allergies</span>
+                    <span class="modal-v">@(string.IsNullOrWhiteSpace(_detail.Allergies) ? "—" : _detail.Allergies)</span>
+                </div>
+                <div class="modal-field modal-field-block">
+                    <span class="modal-k">Medications</span>
+                    <span class="modal-v">@(string.IsNullOrWhiteSpace(_detail.Medications) ? "—" : _detail.Medications)</span>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@if (_showAddForm)
+{
+    <div class="modal-root" @onclick="CloseAddForm" role="dialog" aria-modal="true" aria-labelledby="add-patient-title">
+        <div class="modal-panel" @onclick:stopPropagation="true">
+            <div class="modal-head">
+                <h3 class="modal-title" id="add-patient-title">Add Patient</h3>
+                <button type="button" class="modal-close" @onclick="CloseAddForm" title="Close">×</button>
+            </div>
+
+            @if (!string.IsNullOrWhiteSpace(_formError))
+            {
+                <p class="form-error">@_formError</p>
+            }
+
+            <div class="form-fields">
+                <label class="form-label">
+                    Full name <span class="required">*</span>
+                    <input class="field-input" @bind="_fname" placeholder="e.g. Jane Smith" />
+                </label>
+                <label class="form-label">
+                    Date of birth <span class="required">*</span>
+                    <input class="field-input" type="date" @bind="_fdob" />
+                </label>
+                <label class="form-label">
+                    Phone
+                    <input class="field-input" @bind="_fphone" placeholder="e.g. 555-1234" />
+                </label>
+                <label class="form-label">
+                    Email
+                    <input class="field-input" type="email" @bind="_femail" placeholder="e.g. patient@example.com" />
+                </label>
+                <label class="form-label">
+                    Allergies
+                    <input class="field-input" @bind="_fallergies" placeholder="e.g. Penicillin (rash)" />
+                </label>
+                <label class="form-label">
+                    Medications
+                    <textarea class="field-input field-textarea" @bind="_fmeds" rows="2" placeholder="e.g. Ibuprofen 400 mg PRN"></textarea>
+                </label>
+            </div>
+
+            <div class="form-actions">
+                <button type="button" class="btn-cancel" @onclick="CloseAddForm">Cancel</button>
+                <button type="button" class="btn-submit" @onclick="SubmitAddPatient">Add Patient</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string _search = "";
+    private List<MockClinicData.Patient> _filtered = new();
+    private IEnumerable<IGrouping<char, MockClinicData.Patient>> _grouped =>
+        _filtered.GroupBy(p => char.ToUpperInvariant(p.Name[0])).OrderBy(g => g.Key);
+
+    private MockClinicData.Patient? _detail;
+
+    private bool _showAddForm;
+    private string _fname = "";
+    private DateTime _fdob = DateTime.Today.AddYears(-30);
+    private string _fphone = "";
+    private string _femail = "";
+    private string _fallergies = "";
+    private string _fmeds = "";
+    private string _formError = "";
+
+    protected override void OnInitialized() => RefreshList();
+
+    private void OnSearchChanged(string? term)
+    {
+        _search = term ?? "";
+        RefreshList();
+    }
+
+    private void RefreshList()
+    {
+        var t = _search.Trim().ToLowerInvariant();
+        _filtered = string.IsNullOrWhiteSpace(t)
+            ? Data.Patients.ToList()
+            : Data.Patients.Where(p => p.Name.ToLowerInvariant().Contains(t)).ToList();
+    }
+
+    private void OpenDetail(MockClinicData.Patient p) => _detail = Data.GetPatient(p.Id) ?? p;
+    private void CloseDetail() => _detail = null;
+
+    private void OpenAddForm()
+    {
+        _fname = "";
+        _fdob = DateTime.Today.AddYears(-30);
+        _fphone = "";
+        _femail = "";
+        _fallergies = "";
+        _fmeds = "";
+        _formError = "";
+        _showAddForm = true;
+    }
+
+    private void CloseAddForm() => _showAddForm = false;
+
+    private void SubmitAddPatient()
+    {
+        _formError = "";
+        var name = _fname.Trim();
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            _formError = "Full name is required.";
+            return;
+        }
+
+        var id = $"p-{Guid.NewGuid():N}"[..10];
+        var patient = new MockClinicData.Patient(
+            id,
+            name,
+            _fdob,
+            _fphone.Trim(),
+            _femail.Trim(),
+            _fallergies.Trim(),
+            _fmeds.Trim());
+
+        Data.AddPatient(patient);
+        RefreshList();
+        _showAddForm = false;
+    }
+}
+
+<style>
+    .patients-shell { max-width: 780px; margin: 0 auto; }
+    .patients-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .patients-header h1 { margin: 0; }
+    .btn-add { padding: 8px 16px; background: #2563eb; color: #fff; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 14px; }
+    .btn-add:hover { background: #1d4ed8; }
+    .field-input { width: 100%; padding: 8px 10px; border: 1px solid #ddd; border-radius: 8px; box-sizing: border-box; font: inherit; }
+    .field-textarea { resize: vertical; }
+    .alpha-heading { margin: 18px 0 6px; color: #6b7280; font-size: 13px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; }
+    .muted { color: #6b7280; }
+    .list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
+    .list-item { border: 1px solid #e5e7eb; border-radius: 10px; background: #fafafa; overflow: hidden; }
+    .list-item-btn { width: 100%; text-align: left; border: none; background: transparent; cursor: pointer; font: inherit; padding: 12px; color: inherit; }
+    .list-item-btn:hover { background: #eff6ff; }
+    .list-title { font-weight: 700; }
+    .list-sub { color: #6b7280; font-size: 13px; margin-top: 2px; }
+    .list-hint { margin-top: 6px; font-size: 12px; font-weight: 600; color: #2563eb; }
+    .modal-root { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; background: rgba(15,23,42,0.45); backdrop-filter: blur(2px); }
+    .modal-panel { width: 100%; max-width: 460px; max-height: 90vh; overflow: auto; border-radius: 14px; background: #fff; padding: 16px 18px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+    .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .modal-title { margin: 0; font-size: 16px; font-weight: 800; color: #111827; }
+    .modal-close { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; cursor: pointer; font-size: 20px; line-height: 1; color: #6b7280; }
+    .modal-close:hover { background: #f3f4f6; color: #111827; }
+    .modal-fields { display: flex; flex-direction: column; gap: 12px; font-size: 14px; }
+    .modal-field { display: grid; grid-template-columns: 120px 1fr; gap: 10px; align-items: start; }
+    .modal-field-block { grid-template-columns: 1fr; }
+    .modal-k { color: #6b7280; font-weight: 600; }
+    .modal-v { color: #111827; word-break: break-word; white-space: pre-wrap; }
+    .form-fields { display: flex; flex-direction: column; gap: 12px; }
+    .form-label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600; color: #374151; }
+    .required { color: #dc2626; }
+    .form-error { color: #dc2626; font-size: 13px; margin: 0 0 10px; }
+    .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .btn-cancel { padding: 8px 16px; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; cursor: pointer; font: inherit; color: #374151; }
+    .btn-cancel:hover { background: #f9fafb; }
+    .btn-submit { padding: 8px 16px; background: #2563eb; color: #fff; border: none; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600; }
+    .btn-submit:hover { background: #1d4ed8; }
+</style>

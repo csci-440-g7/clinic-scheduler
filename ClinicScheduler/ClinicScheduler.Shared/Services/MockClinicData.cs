@@ -27,7 +27,8 @@ public static class MockClinicData
         string DoctorId,
         string Location,
         string RoomNumber,
-        string? MeetingNotes);
+        string? MeetingNotes,
+        string Status = "confirmed");
     public sealed record Note(string Id, DateTime Date, string PatientId, string DoctorId, string Author, string Text);
 
     private static DateTime WeekStartMonday(DateTime date)

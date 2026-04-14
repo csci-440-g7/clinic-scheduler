@@ -13,11 +13,16 @@ public class AppointmentsController : ControllerBase
 {
     private readonly ClinicDbContext _dbContext;
     private readonly AppointmentSchedulingService _schedulingService;
+    private readonly MissedAppointmentService _missedAppointmentService;
 
-    public AppointmentsController(ClinicDbContext dbContext, AppointmentSchedulingService schedulingService)
+    public AppointmentsController(
+        ClinicDbContext dbContext,
+        AppointmentSchedulingService schedulingService,
+        MissedAppointmentService missedAppointmentService)
     {
         _dbContext = dbContext;
         _schedulingService = schedulingService;
+        _missedAppointmentService = missedAppointmentService;
     }
 
     [HttpGet]
@@ -124,6 +129,48 @@ public class AppointmentsController : ControllerBase
 
         await _dbContext.SaveChangesAsync(ct);
         return NoContent();
+    }
+
+    /// <summary>
+    /// Marks an appointment as missed and automatically books the next available slot
+    /// for the same patient, therapist, and room. If the appointment has a treatment
+    /// plan, its end date is extended by 7 days to account for the missed session.
+    /// </summary>
+    [HttpPost("{id:int}/mark-missed")]
+    public async Task<ActionResult<MarkMissedResponse>> MarkMissed(int id, CancellationToken ct)
+    {
+        try
+        {
+            var rescheduled = await _missedAppointmentService.MarkMissedAndRescheduleAsync(id, ct);
+
+            var missedAppointment = await _dbContext.Appointments
+                .AsNoTracking()
+                .Include(x => x.Patient)
+                .Include(x => x.Therapist)
+                .Include(x => x.Room)
+                .FirstAsync(x => x.Id == id, ct);
+
+            var rescheduledAppointment = await _dbContext.Appointments
+                .AsNoTracking()
+                .Include(x => x.Patient)
+                .Include(x => x.Therapist)
+                .Include(x => x.Room)
+                .FirstAsync(x => x.Id == rescheduled.Id, ct);
+
+            return Ok(new MarkMissedResponse
+            {
+                MissedAppointment = MapToDto(missedAppointment),
+                RescheduledAppointment = MapToDto(rescheduledAppointment)
+            });
+        }
+        catch (ArgumentException ex)
+        {
+            return NotFound(ex.Message);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new ProblemDetails { Detail = ex.Message });
+        }
     }
 
     [HttpDelete("{id:int}")]

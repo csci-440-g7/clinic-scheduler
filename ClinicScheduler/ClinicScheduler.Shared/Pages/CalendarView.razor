@@ -2,117 +2,31 @@
 @inject ClinicDataStore Data
 
 <div class="calendar-shell">
-    <div class="calendar-sidebar">
-        <div class="mini-month">
-            <div class="month-nav">
-                <button class="nav-btn" title="Previous month" @onclick="PrevMonth">‹</button>
-                <div class="month-title">@_currentMonth.ToString("MMMM yyyy")</div>
-                <button class="nav-btn" title="Next month" @onclick="NextMonth">›</button>
-            </div>
-
-            <div class="dow-row">
-                @foreach (var d in _dayOfWeekLabels)
-                {
-                    <div class="dow">@d</div>
-                }
-            </div>
-
-            <div class="mini-grid">
-                @for (int i = 0; i < 42; i++)
-                {
-                    var cellDate = _miniGridStart.AddDays(i);
-                    var isOutsideMonth = cellDate.Month != _currentMonth.Month;
-                    var isInActiveWeek = cellDate.Date >= _weekStart.Date && cellDate.Date < _weekStart.Date.AddDays(7);
-                    var isSelected = cellDate.Date == _focusedDate.Date;
-
-                    <button class="mini-day @(isOutsideMonth ? "outside" : "") @(isInActiveWeek ? "in-week" : "") @(isSelected ? "selected" : "")"
-                            type="button"
-                            @onclick="() => SelectDate(cellDate)">
-                        @cellDate.Day
-                    </button>
-                }
-            </div>
-        </div>
-
-        <div class="sidebar-lists">
-            <section class="sidebar-section">
-                <h4 class="sidebar-heading">Recent</h4>
-                @if (RecentAppointments.Count == 0)
-                {
-                    <p class="sidebar-empty">No past appointments.</p>
-                }
-                else
-                {
-                    <ul class="sidebar-ul">
-                        @foreach (var a in RecentAppointments)
-                        {
-                            <li>
-                                <button type="button" class="sidebar-appt @(_selected?.Id == a.Id ? "active" : "")" @onclick="() => OpenSidebarAppointment(a)">
-                                    <span class="sidebar-appt-title">@a.Title</span>
-                                    <span class="sidebar-appt-when">@a.Start.ToString("MMM d") · @FormatTimeRange(a)</span>
-                                    <span class="sidebar-appt-sub">@GetAppointmentSubtitle(a)</span>
-                                </button>
-                            </li>
-                        }
-                    </ul>
-                }
-            </section>
-
-            <section class="sidebar-section">
-                <h4 class="sidebar-heading">Upcoming</h4>
-                @if (UpcomingAppointments.Count == 0)
-                {
-                    <p class="sidebar-empty">Nothing scheduled ahead.</p>
-                }
-                else
-                {
-                    <ul class="sidebar-ul">
-                        @foreach (var a in UpcomingAppointments)
-                        {
-                            <li>
-                                <button type="button" class="sidebar-appt @(_selected?.Id == a.Id ? "active" : "")" @onclick="() => OpenSidebarAppointment(a)">
-                                    <span class="sidebar-appt-title">@a.Title</span>
-                                    <span class="sidebar-appt-when">@a.Start.ToString("MMM d") · @FormatTimeRange(a)</span>
-                                    <span class="sidebar-appt-sub">@GetAppointmentSubtitle(a)</span>
-                                </button>
-                            </li>
-                        }
-                    </ul>
-                }
-            </section>
-
-            <section class="sidebar-section">
-                <h4 class="sidebar-heading">Follow-ups</h4>
-                @if (FollowUpAppointments.Count == 0)
-                {
-                    <p class="sidebar-empty">No follow-up visits on file.</p>
-                }
-                else
-                {
-                    <ul class="sidebar-ul">
-                        @foreach (var a in FollowUpAppointments)
-                        {
-                            <li>
-                                <button type="button" class="sidebar-appt @(_selected?.Id == a.Id ? "active" : "")" @onclick="() => OpenSidebarAppointment(a)">
-                                    <span class="sidebar-appt-title">@a.Title</span>
-                                    <span class="sidebar-appt-when">@a.Start.ToString("MMM d") · @FormatTimeRange(a)</span>
-                                    <span class="sidebar-appt-sub">@GetAppointmentSubtitle(a)</span>
-                                </button>
-                            </li>
-                        }
-                    </ul>
-                }
-            </section>
-        </div>
-    </div>
+    <CalendarSidebar ViewerRole="@ViewerRole"
+                     PatientId="@PatientId"
+                     DoctorId="@DoctorId"
+                     WeekStart="@_weekStart"
+                     FocusedDate="@_focusedDate"
+                     SelectedId="@_selected?.Id"
+                     OnDateSelected="OnDateSelected"
+                     OnAppointmentSelected="OnSidebarAppointmentSelected"
+                     OnAppointmentStatusChanged="OnAppointmentStatusChanged" />
 
     <div class="week-panel">
         <div class="week-header">
             <button class="nav-btn" title="Previous week" @onclick="PrevWeek">‹</button>
             <div class="week-title">
-                Week of @_weekStart.ToString("MMM d") - @_weekStart.AddDays(6).ToString("MMM d, yyyy")
+                Week of @_weekStart.ToString("MMM d") – @_weekStart.AddDays(6).ToString("MMM d, yyyy")
             </div>
             <button class="nav-btn" title="Next week" @onclick="NextWeek">›</button>
+            @if (ViewerRole is "staff" or "doctor")
+            {
+                <button type="button" class="btn-book" @onclick="OpenBookForm">+ Book Appointment</button>
+            }
+            else if (ViewerRole == "patient")
+            {
+                <button type="button" class="btn-book" @onclick="OpenRequestForm">+ Request Appointment</button>
+            }
         </div>
 
         <div class="week-grid">
@@ -120,7 +34,7 @@
                 <div class="time-header"></div>
                 @for (int h = StartHour; h < EndHour; h++)
                 {
-                    <div class="time-label">@FormatHourLabel(h)</div>
+                    <div class="time-label">@FormatHour(h)</div>
                 }
             </div>
 
@@ -131,20 +45,21 @@
                         <div class="day-name">@day.ToString("ddd")</div>
                         <div class="day-date">@day.ToString("MMM d")</div>
                     </div>
-
                     <div class="day-body" style="height:@(DayBodyHeightPx)px;">
-                        @foreach (var appt in GetAppointmentsForDay(day))
+                        @foreach (var appt in AppointmentsForDay(day))
                         {
                             <button type="button"
-                                    class="appt-card @GetAppointmentCss(appt.Type) @(_selected?.Id == appt.Id ? "selected" : "")"
-                                    style="@GetAppointmentStyle(day, appt)"
+                                    class="appt-card @ApptCss(appt.Type) @(_selected?.Id == appt.Id ? "selected" : "") @(appt.Status == "pending" ? "appt-pending" : "")"
+                                    style="@ApptStyle(day, appt)"
                                     @onclick="() => ToggleAppointment(appt)">
+                                @if (appt.Status == "pending")
+                                {
+                                    <div class="appt-status-badge">Pending</div>
+                                }
                                 <div class="appt-title">@appt.Title</div>
-                                <div class="appt-time">@FormatTimeRange(appt)</div>
-                                <div class="appt-sub">
-                                    @GetAppointmentSubtitle(appt)
-                                </div>
-                                <div class="appt-hint">@( _selected?.Id == appt.Id ? "Hide details" : "Details" )</div>
+                                <div class="appt-time">@FormatRange(appt)</div>
+                                <div class="appt-sub">@Subtitle(appt)</div>
+                                <div class="appt-hint">@(_selected?.Id == appt.Id ? "Hide details" : "Details")</div>
                             </button>
                         }
                     </div>
@@ -155,79 +70,30 @@
 
     @if (_selected is not null)
     {
-        <div class="appt-modal-root"
-             @onclick="CloseDetail"
-             role="dialog"
-             aria-modal="true"
-             aria-labelledby="appt-modal-title">
-            <div class="appt-modal-panel" @onclick:stopPropagation="true">
-                <div class="appt-detail">
-                    <div class="appt-detail-header">
-                        <h3 id="appt-modal-title" class="appt-detail-title">Appointment</h3>
-                        <button type="button" class="appt-detail-close" @onclick="CloseDetail" title="Close">×</button>
-                    </div>
-                    <div class="appt-detail-grid">
-                        <div class="appt-detail-row">
-                            <span class="k">When</span>
-                            <span class="v">@_selected.Start.ToString("dddd, MMM d, yyyy") · @FormatTimeRange(_selected)</span>
-                        </div>
-                        <div class="appt-detail-row">
-                            <span class="k">Patient</span>
-                            <span class="v">@GetPatientName(_selected)</span>
-                        </div>
-                        <div class="appt-detail-row">
-                            <span class="k">Doctor</span>
-                            <span class="v">@GetDoctorName(_selected)</span>
-                        </div>
-                        @if (CanViewClinicalDetails)
-                        {
-                            <div class="appt-detail-row">
-                                <span class="k">Location</span>
-                                <span class="v">@_selected.Location</span>
-                            </div>
-                            <div class="appt-detail-row">
-                                <span class="k">Room</span>
-                                <span class="v">@_selected.RoomNumber</span>
-                            </div>
-                            @if (ViewerRole == "doctor")
-                            {
-                                <div class="appt-detail-edit">
-                                    <label class="appt-detail-label" for="meeting-notes">Meeting notes</label>
-                                    <textarea id="meeting-notes"
-                                              class="appt-detail-textarea"
-                                              rows="4"
-                                              @bind="_editMeetingNotes"
-                                              @bind:event="oninput"></textarea>
-                                    <div class="appt-detail-actions">
-                                        <button type="button" class="appt-detail-save" @onclick="SaveMeetingNotes">Save notes</button>
-                                        @if (!string.IsNullOrWhiteSpace(_meetingNotesSavedMessage))
-                                        {
-                                            <span class="appt-detail-saved">@_meetingNotesSavedMessage</span>
-                                        }
-                                    </div>
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="appt-detail-row appt-detail-notes">
-                                    <span class="k">Notes</span>
-                                    <span class="v">@(string.IsNullOrWhiteSpace(_selected.MeetingNotes) ? "—" : _selected.MeetingNotes)</span>
-                                </div>
-                            }
-                        }
-                        else
-                        {
-                            <p class="appt-detail-staff-hint">Staff scheduling view: patient and doctor are shown. Location, room, and clinical notes are visible to patients and care providers only.</p>
-                        }
-                    </div>
-                </div>
-            </div>
-        </div>
+        <AppointmentDetailModal Appointment="@_selected"
+                                ViewerRole="@ViewerRole"
+                                OnClose="CloseDetail"
+                                OnStatusChanged="RefreshSelected" />
     }
 </div>
 
+@if (_showBookForm)
+{
+    <BookAppointmentModal InitialDate="@_focusedDate"
+                          OnClose="CloseBookForm"
+                          OnBooked="CloseBookForm" />
+}
+
+@if (_showRequestForm)
+{
+    <RequestAppointmentModal PatientId="@(PatientId ?? "")"
+                             InitialDate="@_focusedDate"
+                             OnClose="CloseRequestForm"
+                             OnRequested="CloseRequestForm" />
+}
+
 @code {
-    [Parameter] public string ViewerRole { get; set; } = "staff"; // "patient" | "doctor" | "staff"
+    [Parameter] public string ViewerRole { get; set; } = "staff";
     [Parameter] public string? PatientId { get; set; }
     [Parameter] public string? DoctorId { get; set; }
 
@@ -235,233 +101,117 @@
     private const int EndHour = 19;
     private const int HourHeightPx = 40;
     private const int DayHeaderHeightPx = 54;
-
     private int DayBodyHeightPx => (EndHour - StartHour) * HourHeightPx;
 
     private DateTime _weekStart;
     private DateTime _focusedDate;
-    private DateTime _currentMonth;
-
-    private readonly string[] _dayOfWeekLabels = new[] { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
-
-    private DateTime _miniGridStart => GetMiniGridStart(_currentMonth);
-
     private IEnumerable<DateTime> _weekDays => Enumerable.Range(0, 7).Select(i => _weekStart.AddDays(i));
 
     private MockClinicData.Appointment? _selected;
-    private string _editMeetingNotes = "";
-    private string? _meetingNotesSavedMessage;
-
-    private bool CanViewClinicalDetails =>
-        ViewerRole is "patient" or "doctor";
+    private bool _showBookForm;
+    private bool _showRequestForm;
 
     protected override void OnInitialized()
     {
         _focusedDate = DateTime.Today.Date;
-        _weekStart = GetWeekStartMonday(_focusedDate);
-        _currentMonth = new DateTime(_weekStart.Year, _weekStart.Month, 1);
+        _weekStart = WeekStartMonday(_focusedDate);
     }
 
-    private void PrevWeek()
-    {
-        _weekStart = _weekStart.AddDays(-7);
-        _focusedDate = _weekStart.Date;
-        _currentMonth = new DateTime(_weekStart.Year, _weekStart.Month, 1);
-    }
+    private void PrevWeek() { _weekStart = _weekStart.AddDays(-7); _focusedDate = _weekStart; }
+    private void NextWeek() { _weekStart = _weekStart.AddDays(7);  _focusedDate = _weekStart; }
 
-    private void NextWeek()
-    {
-        _weekStart = _weekStart.AddDays(7);
-        _focusedDate = _weekStart.Date;
-        _currentMonth = new DateTime(_weekStart.Year, _weekStart.Month, 1);
-    }
-
-    private void PrevMonth() => _currentMonth = _currentMonth.AddMonths(-1);
-    private void NextMonth() => _currentMonth = _currentMonth.AddMonths(1);
-
-    private void SelectDate(DateTime date)
+    private void OnDateSelected(DateTime date)
     {
         _focusedDate = date.Date;
-        _weekStart = GetWeekStartMonday(_focusedDate);
-        _currentMonth = new DateTime(date.Year, date.Month, 1);
+        _weekStart = WeekStartMonday(_focusedDate);
     }
 
-    private static DateTime GetWeekStartMonday(DateTime date)
-    {
-        var d = date.Date;
-        var diff = ((int)d.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
-        return d.AddDays(-diff);
-    }
-
-    private static DateTime GetMiniGridStart(DateTime month)
-    {
-        var first = new DateTime(month.Year, month.Month, 1);
-        var offset = ((int)first.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7;
-        return first.AddDays(-offset);
-    }
-
-    private IEnumerable<MockClinicData.Appointment> AppointmentsForViewer()
-    {
-        IEnumerable<MockClinicData.Appointment> query = Data.Appointments;
-
-        return ViewerRole switch
-        {
-            "patient" when !string.IsNullOrWhiteSpace(PatientId) => query.Where(a => a.PatientId == PatientId),
-            "doctor" when !string.IsNullOrWhiteSpace(DoctorId) => query.Where(a => a.DoctorId == DoctorId),
-            "staff" => query,
-            _ => Enumerable.Empty<MockClinicData.Appointment>()
-        };
-    }
-
-    private List<MockClinicData.Appointment> RecentAppointments
-    {
-        get
-        {
-            var now = DateTime.Now;
-            return AppointmentsForViewer()
-                .Where(a => a.End < now)
-                .OrderByDescending(a => a.Start)
-                .Take(5)
-                .ToList();
-        }
-    }
-
-    private List<MockClinicData.Appointment> UpcomingAppointments
-    {
-        get
-        {
-            var now = DateTime.Now;
-            return AppointmentsForViewer()
-                .Where(a => a.Start > now)
-                .OrderBy(a => a.Start)
-                .Take(5)
-                .ToList();
-        }
-    }
-
-    private List<MockClinicData.Appointment> FollowUpAppointments
-    {
-        get
-        {
-            var now = DateTime.Now;
-            return AppointmentsForViewer()
-                .Where(a => a.Title.Contains("follow", StringComparison.OrdinalIgnoreCase) && a.Start > now)
-                .OrderBy(a => a.Start)
-                .Take(5)
-                .ToList();
-        }
-    }
-
-    private IEnumerable<MockClinicData.Appointment> GetAppointmentsForWeek()
-    {
-        var weekEndExclusive = _weekStart.AddDays(7);
-
-        return AppointmentsForViewer()
-            .Where(a => a.Start < weekEndExclusive && a.End > _weekStart)
-            .OrderBy(a => a.Start);
-    }
-
-    private IEnumerable<MockClinicData.Appointment> GetAppointmentsForDay(DateTime day)
-        => GetAppointmentsForWeek().Where(a => a.Start.Date == day.Date);
-
-    private string GetAppointmentCss(string type) => type switch
-    {
-        "medical" => "appt-medical",
-        "lab" => "appt-lab",
-        "intake" => "appt-intake",
-        "admin" => "appt-admin",
-        _ => "appt-default"
-    };
-
-    private string GetAppointmentSubtitle(MockClinicData.Appointment appt)
-    {
-        var patient = Data.GetPatient(appt.PatientId);
-        var doctor = MockClinicData.Doctors.FirstOrDefault(d => d.Id == appt.DoctorId);
-
-        patient ??= new MockClinicData.Patient("?", "Unknown Patient", DateTime.Today, "", "", "", "");
-        doctor ??= new MockClinicData.Doctor("?", "Unknown Doctor", "");
-
-        return ViewerRole switch
-        {
-            "patient" => doctor.Name,
-            "doctor" => patient.Name,
-            "staff" => $"{patient.Name} · {doctor.Name}",
-            _ => ""
-        };
-    }
-
-    private string GetPatientName(MockClinicData.Appointment appt)
-        => Data.GetPatient(appt.PatientId)?.Name ?? "Unknown";
-
-    private string GetDoctorName(MockClinicData.Appointment appt)
-        => MockClinicData.Doctors.FirstOrDefault(d => d.Id == appt.DoctorId)?.Name ?? "Unknown";
-
-    private static string FormatHourLabel(int hour24)
-    {
-        var t = DateTime.Today.AddHours(hour24);
-        return t.ToString("h:mm tt");
-    }
-
-    private static string FormatTimeRange(MockClinicData.Appointment appt)
-        => $"{appt.Start:h:mm tt} – {appt.End:h:mm tt}";
-
-    private void OpenSidebarAppointment(MockClinicData.Appointment appt)
-    {
-        _meetingNotesSavedMessage = null;
+    private void OnSidebarAppointmentSelected(MockClinicData.Appointment appt) =>
         _selected = Data.GetAppointment(appt.Id) ?? appt;
-        _editMeetingNotes = _selected.MeetingNotes ?? "";
-    }
 
     private void ToggleAppointment(MockClinicData.Appointment appt)
     {
-        _meetingNotesSavedMessage = null;
-        if (_selected?.Id == appt.Id)
-        {
-            _selected = null;
-            _editMeetingNotes = "";
-            return;
-        }
-
+        if (_selected?.Id == appt.Id) { _selected = null; return; }
         _selected = Data.GetAppointment(appt.Id) ?? appt;
-        _editMeetingNotes = _selected.MeetingNotes ?? "";
     }
 
-    private void CloseDetail()
+    private void CloseDetail() => _selected = null;
+    private void RefreshSelected()
     {
-        _selected = null;
-        _editMeetingNotes = "";
-        _meetingNotesSavedMessage = null;
+        if (_selected is not null)
+            _selected = Data.GetAppointment(_selected.Id) ?? _selected;
     }
 
-    private void SaveMeetingNotes()
+    private void OnAppointmentStatusChanged()
     {
-        if (_selected is null || ViewerRole != "doctor")
+        // Refresh selected appointment if it was the one actioned from the sidebar.
+        RefreshSelected();
+        StateHasChanged();
+    }
+    private void OpenBookForm() => _showBookForm = true;
+    private void CloseBookForm() => _showBookForm = false;
+    private void OpenRequestForm() => _showRequestForm = true;
+    private void CloseRequestForm() => _showRequestForm = false;
+
+    private static DateTime WeekStartMonday(DateTime date)
+    {
+        var d = date.Date;
+        return d.AddDays(-(((int)d.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7));
+    }
+
+    private IEnumerable<MockClinicData.Appointment> ForViewer()
+    {
+        IEnumerable<MockClinicData.Appointment> q = Data.Appointments;
+        return ViewerRole switch
         {
-            return;
-        }
-
-        Data.UpdateAppointmentMeetingNotes(_selected.Id, string.IsNullOrWhiteSpace(_editMeetingNotes) ? null : _editMeetingNotes.Trim());
-        _selected = Data.GetAppointment(_selected.Id);
-        _meetingNotesSavedMessage = "Saved.";
+            "patient" when !string.IsNullOrWhiteSpace(PatientId) => q.Where(a => a.PatientId == PatientId),
+            "doctor"  when !string.IsNullOrWhiteSpace(DoctorId)  => q.Where(a => a.DoctorId  == DoctorId),
+            "staff"                                               => q,
+            _                                                     => Enumerable.Empty<MockClinicData.Appointment>()
+        };
     }
 
-    private string GetAppointmentStyle(DateTime day, MockClinicData.Appointment appt)
+    private IEnumerable<MockClinicData.Appointment> AppointmentsForDay(DateTime day)
     {
-        var dayStart = day.Date;
-        var startMinutes = (appt.Start - dayStart).TotalMinutes;
-        var endMinutes = (appt.End - dayStart).TotalMinutes;
+        var weekEnd = _weekStart.AddDays(7);
+        return ForViewer()
+            .Where(a => a.Start < weekEnd && a.End > _weekStart && a.Start.Date == day.Date)
+            .OrderBy(a => a.Start);
+    }
 
-        var visibleStartMinutes = Math.Max(startMinutes, StartHour * 60);
-        var visibleEndMinutes = Math.Min(endMinutes, EndHour * 60);
-
-        var clampedTop = (visibleStartMinutes - StartHour * 60) / 60d * HourHeightPx;
-        var clampedHeight = (visibleEndMinutes - visibleStartMinutes) / 60d * HourHeightPx;
-
-        if (clampedHeight < 18)
+    private string Subtitle(MockClinicData.Appointment a)
+    {
+        var patient = Data.GetPatient(a.PatientId) ?? new MockClinicData.Patient("?", "Unknown", DateTime.Today, "", "", "", "");
+        var doctor  = MockClinicData.Doctors.FirstOrDefault(d => d.Id == a.DoctorId) ?? new MockClinicData.Doctor("?", "Unknown", "");
+        return ViewerRole switch
         {
-            clampedHeight = 18;
-        }
+            "patient" => doctor.Name,
+            "doctor"  => patient.Name,
+            "staff"   => $"{patient.Name} · {doctor.Name}",
+            _         => ""
+        };
+    }
 
-        return $"top:{clampedTop:0}px; height:{clampedHeight:0}px;";
+    private static string ApptCss(string type) => type switch
+    {
+        "medical" => "appt-medical",
+        "lab"     => "appt-lab",
+        "intake"  => "appt-intake",
+        "admin"   => "appt-admin",
+        _         => "appt-default"
+    };
+
+    private static string FormatHour(int h) => DateTime.Today.AddHours(h).ToString("h:mm tt");
+    private static string FormatRange(MockClinicData.Appointment a) => $"{a.Start:h:mm tt} – {a.End:h:mm tt}";
+
+    private string ApptStyle(DateTime day, MockClinicData.Appointment a)
+    {
+        var startMin = (a.Start - day.Date).TotalMinutes;
+        var endMin   = (a.End   - day.Date).TotalMinutes;
+        var visStart = Math.Max(startMin, StartHour * 60);
+        var visEnd   = Math.Min(endMin,   EndHour   * 60);
+        var top    = (visStart - StartHour * 60) / 60d * HourHeightPx;
+        var height = Math.Max((visEnd - visStart) / 60d * HourHeightPx, 18);
+        return $"top:{top:0}px; height:{height:0}px;";
     }
 }

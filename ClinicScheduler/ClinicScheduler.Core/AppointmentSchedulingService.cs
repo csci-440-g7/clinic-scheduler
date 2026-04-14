@@ -49,7 +49,28 @@ public class AppointmentSchedulingService
 
         var endTime = startTime.Add(duration);
 
-        var conflictingAppointments = await _appointmentRepository.FindAsync(a => 
+        // Business rule: appointments must be exactly 30 minutes
+        if (duration != TimeSpan.FromMinutes(30))
+            throw new ArgumentException("Appointments must be exactly 30 minutes.", nameof(duration));
+
+        // Business rule: appointments must be on weekdays only
+        if (startTime.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday)
+            throw new ArgumentException("Appointments can only be scheduled on weekdays (Monday–Friday).", nameof(startTime));
+
+        // Business rule: appointments must fall within 8:00 am – 5:00 pm
+        var clinicOpen = TimeSpan.FromHours(8);
+        var clinicClose = TimeSpan.FromHours(17);
+        if (startTime.TimeOfDay < clinicOpen || endTime.TimeOfDay > clinicClose)
+            throw new ArgumentException("Appointments must be scheduled between 8:00 AM and 5:00 PM.", nameof(startTime));
+
+        // Business rule: max 12 concurrent patients at any one time
+        var concurrentAppointments = await _appointmentRepository.FindAsync(a =>
+            a.Status != AppointmentStatus.Canceled && a.Status != AppointmentStatus.Missed &&
+            a.StartTime < endTime && a.EndTime > startTime, ct);
+        if (concurrentAppointments.Count >= 12)
+            throw new InvalidOperationException("The clinic has reached its maximum capacity of 12 concurrent patients for this time slot.");
+
+        var conflictingAppointments = await _appointmentRepository.FindAsync(a =>
             (a.TherapistId == therapistId || a.RoomId == roomId || a.PatientId == patientId) &&
             a.Status != AppointmentStatus.Canceled && a.Status != AppointmentStatus.Missed &&
             a.StartTime < endTime && a.EndTime > startTime, ct);

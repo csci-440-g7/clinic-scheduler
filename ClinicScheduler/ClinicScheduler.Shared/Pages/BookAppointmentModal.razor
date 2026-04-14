@@ -1,0 +1,145 @@
+@using ClinicScheduler.Shared.Services
+@inject ClinicDataStore Data
+
+<div class="book-backdrop"
+     @onclick="OnClose"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="book-appt-title">
+    <div class="book-panel" @onclick:stopPropagation="true">
+        <div class="book-header">
+            <h3 id="book-appt-title" class="book-title">Book Appointment</h3>
+            <button type="button" class="book-close" @onclick="OnClose" title="Close">×</button>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <p class="book-error">@_error</p>
+        }
+
+        <div class="book-fields">
+            <label class="book-label">
+                Title <span class="book-req">*</span>
+                <input class="book-input" @bind="_title" placeholder="e.g. Follow-up Visit" />
+            </label>
+            <label class="book-label">
+                Patient <span class="book-req">*</span>
+                <select class="book-input" @bind="_patientId">
+                    <option value="">— select patient —</option>
+                    @foreach (var p in Data.Patients)
+                    {
+                        <option value="@p.Id">@p.Name</option>
+                    }
+                </select>
+            </label>
+            <label class="book-label">
+                Doctor <span class="book-req">*</span>
+                <select class="book-input" @bind="_doctorId">
+                    <option value="">— select doctor —</option>
+                    @foreach (var d in MockClinicData.Doctors)
+                    {
+                        <option value="@d.Id">@d.Name</option>
+                    }
+                </select>
+            </label>
+            <label class="book-label">
+                Type
+                <select class="book-input" @bind="_type">
+                    <option value="medical">Medical</option>
+                    <option value="lab">Lab / Procedure</option>
+                    <option value="intake">Intake</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </label>
+            <label class="book-label">
+                Date <span class="book-req">*</span>
+                <input class="book-input" type="date" @bind="_date" />
+            </label>
+            <div class="book-time-row">
+                <label class="book-label">
+                    Start time <span class="book-req">*</span>
+                    <input class="book-input" type="time" @bind="_startTime" />
+                </label>
+                <label class="book-label">
+                    End time <span class="book-req">*</span>
+                    <input class="book-input" type="time" @bind="_endTime" />
+                </label>
+            </div>
+            <label class="book-label">
+                Location
+                <input class="book-input" @bind="_location" placeholder="e.g. Pain Clinic — Main" />
+            </label>
+            <label class="book-label">
+                Room
+                <input class="book-input" @bind="_room" placeholder="e.g. 201" />
+            </label>
+        </div>
+
+        <div class="book-actions">
+            <button type="button" class="book-btn-cancel" @onclick="OnClose">Cancel</button>
+            <button type="button" class="book-btn-submit" @onclick="Submit">Book</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public DateTime InitialDate { get; set; } = DateTime.Today;
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnBooked { get; set; }
+
+    private string _title = "";
+    private string _patientId = "";
+    private string _doctorId = "";
+    private string _type = "medical";
+    private DateTime _date;
+    private TimeOnly _startTime = new(9, 0);
+    private TimeOnly _endTime = new(9, 30);
+    private string _location = "";
+    private string _room = "";
+    private string _error = "";
+
+    protected override void OnInitialized() => _date = InitialDate;
+
+    private void Submit()
+    {
+        _error = "";
+        if (string.IsNullOrWhiteSpace(_title))     { _error = "Title is required.";          return; }
+        if (string.IsNullOrWhiteSpace(_patientId)) { _error = "Please select a patient.";     return; }
+        if (string.IsNullOrWhiteSpace(_doctorId))  { _error = "Please select a doctor.";      return; }
+        if (_endTime <= _startTime)                { _error = "End time must be after start."; return; }
+
+        Data.AddAppointment(new MockClinicData.Appointment(
+            $"a-{Guid.NewGuid():N}"[..10],
+            _date.Date + _startTime.ToTimeSpan(),
+            _date.Date + _endTime.ToTimeSpan(),
+            _title.Trim(),
+            _type,
+            _patientId,
+            _doctorId,
+            _location.Trim(),
+            _room.Trim(),
+            null));
+
+        OnBooked.InvokeAsync();
+    }
+}
+
+<style>
+    .book-backdrop { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; background: rgba(15,23,42,0.45); backdrop-filter: blur(2px); }
+    .book-panel { width: 100%; max-width: 460px; max-height: 90vh; overflow: auto; border-radius: 14px; background: #fff; padding: 16px 18px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+    .book-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .book-title { margin: 0; font-size: 15px; font-weight: 800; color: #111827; }
+    .book-close { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; cursor: pointer; font-size: 20px; line-height: 1; color: #6b7280; display: flex; align-items: center; justify-content: center; }
+    .book-close:hover { background: #f3f4f6; color: #111827; }
+    .book-error { color: #dc2626; font-size: 13px; margin: 0 0 10px; }
+    .book-fields { display: flex; flex-direction: column; gap: 12px; }
+    .book-label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600; color: #374151; }
+    .book-req { color: #dc2626; }
+    .book-input { width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box; font: inherit; background: #fff; }
+    .book-time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .book-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 18px; }
+    .book-btn-cancel { padding: 8px 16px; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; cursor: pointer; font: inherit; color: #374151; }
+    .book-btn-cancel:hover { background: #f9fafb; }
+    .book-btn-submit { padding: 8px 16px; background: #2563eb; color: #fff; border: none; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600; }
+    .book-btn-submit:hover { background: #1d4ed8; }
+</style>

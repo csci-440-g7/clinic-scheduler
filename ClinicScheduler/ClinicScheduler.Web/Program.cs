@@ -14,7 +14,7 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Register the Database Context
 var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrWhiteSpace(defaultConnectionString))
+if (string.IsNullOrWhiteSpace(defaultConnectionString) && !builder.Environment.IsEnvironment("Testing"))
 {
     throw new InvalidOperationException(
         "The connection string 'DefaultConnection' is missing or empty. Please configure a valid connection string in appsettings.json or environment configuration.");
@@ -28,6 +28,7 @@ builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 
 // Register business logic services
 builder.Services.AddScoped<AppointmentSchedulingService>();
+builder.Services.AddScoped<MissedAppointmentService>();
 
 // Add API Controllers
 builder.Services.AddControllers()

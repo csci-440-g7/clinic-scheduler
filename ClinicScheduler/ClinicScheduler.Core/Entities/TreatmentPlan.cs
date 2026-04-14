@@ -33,7 +33,7 @@ public class TreatmentPlan
     public ICollection<TreatmentPlanTherapy> TreatmentPlanTherapies { get; set; } = [];
 
     private static readonly int[] ValidFrequencies = [2, 3, 4];
-    private static readonly int[] ValidDurations = [20, 30, 50];
+    private static readonly int[] ValidDurations = [20, 30, 40, 50];
 
     /// <summary>
     /// Private constructor for EF Core.
@@ -109,5 +109,14 @@ public class TreatmentPlan
             TreatmentPlanTherapies.Remove(therapyToRemove);
             UpdatedAt = DateTime.UtcNow;
         }
+    }
+
+    /// <summary>
+    /// Extends the treatment plan end date by 7 calendar days to account for a missed session.
+    /// </summary>
+    public void ExtendForMissedSession()
+    {
+        EndDate = EndDate.AddDays(7);
+        UpdatedAt = DateTime.UtcNow;
     }
 }

@@ -21,6 +21,8 @@ public class ClinicDataStore
     public MockClinicData.Patient? GetPatient(string id) =>
         _patients.FirstOrDefault(p => p.Id == id);
 
+    public void AddPatient(MockClinicData.Patient p) => _patients.Add(p);
+
     public void UpdatePatient(MockClinicData.Patient p)
     {
         var i = _patients.FindIndex(x => x.Id == p.Id);
@@ -34,6 +36,15 @@ public class ClinicDataStore
 
     public MockClinicData.Appointment? GetAppointment(string id) =>
         _appointments.FirstOrDefault(a => a.Id == id);
+
+    public void AddAppointment(MockClinicData.Appointment a) => _appointments.Add(a);
+
+    public void UpdateAppointmentStatus(string id, string status)
+    {
+        var i = _appointments.FindIndex(a => a.Id == id);
+        if (i >= 0)
+            _appointments[i] = _appointments[i] with { Status = status };
+    }
 
     public void UpdateAppointmentMeetingNotes(string id, string? meetingNotes)
     {

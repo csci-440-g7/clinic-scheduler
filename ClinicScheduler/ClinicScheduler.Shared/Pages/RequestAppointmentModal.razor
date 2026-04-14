@@ -1,0 +1,133 @@
+@using ClinicScheduler.Shared.Services
+@inject ClinicDataStore Data
+
+<div class="raq-backdrop"
+     @onclick="OnClose"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="raq-title">
+    <div class="raq-panel" @onclick:stopPropagation="true">
+        <div class="raq-header">
+            <h3 id="raq-title" class="raq-title">Request Appointment</h3>
+            <button type="button" class="raq-close" @onclick="OnClose" title="Close">×</button>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <p class="raq-error">@_error</p>
+        }
+
+        <div class="raq-fields">
+            <label class="raq-label">
+                Doctor <span class="raq-req">*</span>
+                <select class="raq-input" @bind="_doctorId">
+                    <option value="">— select doctor —</option>
+                    @foreach (var d in MockClinicData.Doctors)
+                    {
+                        <option value="@d.Id">@d.Name (@d.Specialty)</option>
+                    }
+                </select>
+            </label>
+            <label class="raq-label">
+                Appointment type
+                <select class="raq-input" @bind="_type">
+                    <option value="medical">Medical visit</option>
+                    <option value="lab">Lab / Procedure</option>
+                    <option value="intake">Intake</option>
+                </select>
+            </label>
+            <label class="raq-label">
+                Preferred date <span class="raq-req">*</span>
+                <input class="raq-input" type="date" @bind="_date" />
+            </label>
+            <div class="raq-time-row">
+                <label class="raq-label">
+                    Start time <span class="raq-req">*</span>
+                    <input class="raq-input" type="time" @bind="_startTime" />
+                </label>
+                <label class="raq-label">
+                    End time <span class="raq-req">*</span>
+                    <input class="raq-input" type="time" @bind="_endTime" />
+                </label>
+            </div>
+            <label class="raq-label">
+                Reason for visit
+                <textarea class="raq-input raq-textarea"
+                          @bind="_reason"
+                          placeholder="Briefly describe why you are requesting this appointment"
+                          rows="3"></textarea>
+            </label>
+        </div>
+
+        <p class="raq-note">Your request will appear on your calendar as <strong>Pending</strong> until clinic staff confirms it.</p>
+
+        <div class="raq-actions">
+            <button type="button" class="raq-btn-cancel" @onclick="OnClose">Cancel</button>
+            <button type="button" class="raq-btn-submit" @onclick="Submit">Submit Request</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public string PatientId { get; set; } = "";
+    [Parameter] public DateTime InitialDate { get; set; } = DateTime.Today;
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnRequested { get; set; }
+
+    private string _doctorId = "";
+    private string _type = "medical";
+    private DateTime _date;
+    private TimeOnly _startTime = new(9, 0);
+    private TimeOnly _endTime = new(9, 30);
+    private string _reason = "";
+    private string _error = "";
+
+    protected override void OnInitialized() => _date = InitialDate;
+
+    private void Submit()
+    {
+        _error = "";
+        if (string.IsNullOrWhiteSpace(_doctorId)) { _error = "Please select a doctor.";          return; }
+        if (_endTime <= _startTime)               { _error = "End time must be after start time."; return; }
+
+        var doctor = MockClinicData.Doctors.FirstOrDefault(d => d.Id == _doctorId);
+        var title  = doctor is not null ? $"Appointment request — {doctor.Name}" : "Appointment request";
+
+        Data.AddAppointment(new MockClinicData.Appointment(
+            $"a-{Guid.NewGuid():N}"[..10],
+            _date.Date + _startTime.ToTimeSpan(),
+            _date.Date + _endTime.ToTimeSpan(),
+            title,
+            _type,
+            PatientId,
+            _doctorId,
+            "",
+            "",
+            string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim(),
+            "pending"));
+
+        OnRequested.InvokeAsync();
+    }
+}
+
+<style>
+    .raq-backdrop { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; background: rgba(15,23,42,0.45); backdrop-filter: blur(2px); }
+    .raq-panel { width: 100%; max-width: 460px; max-height: 90vh; overflow: auto; border-radius: 14px; background: #fff; padding: 16px 18px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+    .raq-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .raq-title { margin: 0; font-size: 15px; font-weight: 800; color: #111827; }
+    .raq-close { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; cursor: pointer; font-size: 20px; line-height: 1; color: #6b7280; display: flex; align-items: center; justify-content: center; }
+    .raq-close:hover { background: #f3f4f6; color: #111827; }
+    .raq-error { color: #dc2626; font-size: 13px; margin: 0 0 10px; }
+    .raq-fields { display: flex; flex-direction: column; gap: 12px; }
+    .raq-label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600; color: #374151; }
+    .raq-req { color: #dc2626; }
+    .raq-input { width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box; font: inherit; background: #fff; }
+    .raq-textarea { resize: vertical; min-height: 72px; }
+    .raq-time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .raq-note { margin: 14px 0 0; font-size: 12px; color: #6b7280; line-height: 1.5; }
+    .raq-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+    .raq-btn-cancel { padding: 8px 16px; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; cursor: pointer; font: inherit; color: #374151; }
+    .raq-btn-cancel:hover { background: #f9fafb; }
+    .raq-btn-submit { padding: 8px 16px; background: #2563eb; color: #fff; border: none; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600; }
+    .raq-btn-submit:hover { background: #1d4ed8; }
+</style>
