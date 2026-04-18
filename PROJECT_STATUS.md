@@ -1,6 +1,6 @@
 # Project Status — ClinicScheduler
 
-**Last updated:** 2026-04-18 (Phase 2 in progress)
+**Last updated:** 2026-04-18 (Phase 2 complete — app live on EC2)
 **Branch:** `MVP` (worktree `claude/gallant-brown`)
 **Course:** East Texas A&M CSCI-440 Group 7 Capstone
 
@@ -98,18 +98,28 @@ See [TESTING.md](TESTING.md) for full strategy documentation.
 | `deploy/start.sh` created | Re-runnable start/update script: validates `.env` has no placeholder values, `git pull`, `docker-compose up --build -d`; prints app URL on completion |
 | `DEPLOYMENT_NOTES.md` rewritten | Full step-by-step guide: EC2 launch (console settings, security group rules), SSH instructions including `.pem` permission fix for Windows, bootstrap, `.env` editing, start, verify, useful commands, architecture summary |
 
-### Phase 2 Status — Code Complete, Manual AWS Steps Remaining
-
-The deployment scripts and documentation are ready. The following steps require manual action in the AWS Console and EC2 terminal:
+### Phase 2 Status — **LIVE** at http://52.72.1.65:8081
 
 | Step | Status | Notes |
 |---|---|---|
-| Launch EC2 instance (t3.small, us-east-1, AMI: Amazon Linux 2023) | **Pending — manual** | See DEPLOYMENT_NOTES.md Step 1 |
-| Configure security group (SSH:22 from your IP, TCP:8080 public) | **Pending — manual** | Do during EC2 launch |
-| SSH in and run `deploy/bootstrap.sh` | **Pending — manual** | See DEPLOYMENT_NOTES.md Step 3 |
-| Edit `.env` with real passwords | **Pending — manual** | See DEPLOYMENT_NOTES.md Step 4 |
-| Run `deploy/start.sh` | **Pending — manual** | See DEPLOYMENT_NOTES.md Step 5 |
-| Verify app at `http://<EC2-public-IP>:8080` | **Pending — manual** | See DEPLOYMENT_NOTES.md Step 6 |
+| Launch EC2 instance (t3.small, us-east-1, AMI: Amazon Linux 2023) | ✅ Complete | Elastic IP: `52.72.1.65` |
+| Configure security group (SSH:22, TCP:8081, TCP:8080 public) | ✅ Complete | `launch-wizard-2` sg |
+| SSH + Docker + repo bootstrap | ✅ Complete | Run manually (bootstrap.sh was pushed after initial setup) |
+| `.env` configured with production passwords | ✅ Complete | Set on EC2, not committed |
+| `docker-compose up --build` | ✅ Complete | App + PostgreSQL running |
+| App accessible at public IP | ✅ Complete | http://52.72.1.65:8081 |
+
+### Phase 2 Bug Fixes Applied During EC2 Deployment
+
+| Bug | Fix |
+|---|---|
+| `ClinicDbContext` merge conflict had wrong base class (`DbContext` instead of `IdentityDbContext<AppUser>`) and missing `AppointmentRequests`, `Notifications`, `AuditLogs` DbSets — caused Docker build failure | Restored correct base class and DbSets; committed and pushed |
+| Duplicate `ClinicScheduler.Web.Tests` entry in `ClinicScheduler.slnx` | Removed duplicate entry |
+| `Moq` package missing from `ClinicScheduler.Web.Tests.csproj` | Added `Moq` v4.20.72 package reference |
+| EF migration `FixTotalDaysConstraint` failed on EC2: PostgreSQL cannot auto-cast `text → integer` | Replaced `AlterColumn` with raw SQL `ALTER COLUMN ... TYPE integer USING "Col"::integer` |
+| Duplicate `Index.razor` and `Home.razor` both registered at `@page "/"` — caused `AmbiguousMatchException` (HTTP 500) | Deleted legacy `Index.razor` |
+| `Login.razor` was a mock (SessionState, hardcoded code) — caused infinite redirect loop with Identity auth fallback policy | Replaced with real `SignInManager.PasswordSignInAsync` login; added `[AllowAnonymous]` to `/login` and `/2fa` |
+| `.claude/worktrees/` accidentally committed | Added `.claude/` to `.gitignore`; removed from tracking |
 
 ---
 
@@ -145,11 +155,11 @@ The deployment scripts and documentation are ready. The following steps require 
 
 | Item | Priority | Notes |
 |---|---|---|
-| Concurrency / load test for 12-patient cap | Medium | Would require parallel HTTP requests in an integration test; low risk in practice since cap check uses a single DB query with no in-memory state |
-| AWS EC2 provisioning (Phase 2) | High | Scripts ready (`deploy/bootstrap.sh`, `deploy/start.sh`); manual AWS Console steps documented in `DEPLOYMENT_NOTES.md` — needs EC2 launch + SSH execution |
-| GitHub Actions CI/CD pipeline (Phase 3) | High | Create `.github/workflows/deploy.yml`; add `EC2_HOST`, `EC2_USER`, `EC2_SSH_KEY` secrets to repo — requires EC2 IP from Phase 2 first |
-| Production seeded account passwords | Medium | Seeded demo passwords (`manager1234` etc.) don't meet production password policy — update before deploying with `ASPNETCORE_ENVIRONMENT=Production` |
+| GitHub Actions CI/CD pipeline (Phase 3) | High | Create `.github/workflows/deploy.yml`; add `EC2_HOST=52.72.1.65`, `EC2_USER=ec2-user`, `EC2_SSH_KEY` secrets to repo |
+| Full end-to-end login flow smoke test | High | Login page replaced with real Identity login — needs browser verification that sign-in works with all seeded accounts |
+| `Twofactor.razor` mock cleanup | Medium | `/2fa` still uses hardcoded "1234" code — either wire to real TOTP/email 2FA or remove the page entirely |
 | `AllowedOrigins` in production config | Low | Populate `AllowedOrigins` in EC2 `.env` or `appsettings.Production.json` if API will be consumed from external origins |
+| Concurrency / load test for 12-patient cap | Low | Would require parallel HTTP requests in an integration test; low risk in practice |
 
 ---
 

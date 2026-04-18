@@ -128,15 +128,25 @@ See [TESTING.md](TESTING.md) for a full description of the testing strategy.
 
 ## Deployment
 
+**Live:** http://52.72.1.65:8081 (EC2 t3.small, us-east-1, Elastic IP)
+
 See [DEPLOYMENT_NOTES.md](DEPLOYMENT_NOTES.md) for step-by-step EC2 deployment instructions.
 
-Required environment variables for production (set in `.env` or EC2 environment):
+Required environment variables for production (set in `.env` on EC2 — never committed):
 
 | Variable | Purpose |
 |---|---|
 | `POSTGRES_PASSWORD` | PostgreSQL password (used by both db and app containers) |
-| `SEED_ADMIN_PASSWORD` | Admin account password seeded on first run |
+| `SEED_ADMIN_PASSWORD` | Admin account password seeded on first run (min 10 chars, uppercase, digit, special char) |
 | `ASPNETCORE_ENVIRONMENT` | Set to `Production` on EC2 |
+
+To update the running EC2 deployment after pushing changes to `MVP`:
+```bash
+ssh -i ~/clinic-capstone-key.pem ec2-user@52.72.1.65
+cd /home/ec2-user/clinic-scheduler
+git pull origin MVP
+docker-compose --env-file .env up --build -d
+```
 
 ---
 
