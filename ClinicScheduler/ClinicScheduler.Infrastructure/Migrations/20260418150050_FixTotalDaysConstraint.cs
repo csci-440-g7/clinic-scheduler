@@ -18,21 +18,8 @@ namespace ClinicScheduler.Infrastructure.Migrations
                 name: "CK_TreatmentPlan_TotalDays",
                 table: "TreatmentPlans");
 
-            migrationBuilder.AlterColumn<int>(
-                name: "Type",
-                table: "Notifications",
-                type: "integer",
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "text");
-
-            migrationBuilder.AlterColumn<int>(
-                name: "Action",
-                table: "AuditLogs",
-                type: "integer",
-                nullable: false,
-                oldClrType: typeof(string),
-                oldType: "text");
+            migrationBuilder.Sql(@"ALTER TABLE ""Notifications"" ALTER COLUMN ""Type"" TYPE integer USING ""Type""::integer;");
+            migrationBuilder.Sql(@"ALTER TABLE ""AuditLogs"" ALTER COLUMN ""Action"" TYPE integer USING ""Action""::integer;");
 
             migrationBuilder.AddCheckConstraint(
                 name: "CK_TreatmentPlan_TotalDays",
