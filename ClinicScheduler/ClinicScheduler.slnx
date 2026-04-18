@@ -7,5 +7,4 @@
   <Project Path="ClinicScheduler.Web/ClinicScheduler.Web.csproj" />
   <Project Path="ClinicScheduler.Web.Tests/ClinicScheduler.Web.Tests.csproj" />
   <Project Path="ClinicScheduler/ClinicScheduler.csproj" />
-  <Project Path="ClinicScheduler.Web.Tests/ClinicScheduler.Web.Tests.csproj" />
 </Solution>

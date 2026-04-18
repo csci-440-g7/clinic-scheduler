@@ -1,4 +1,6 @@
 using ClinicScheduler.Core.Entities;
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace ClinicScheduler.Infrastructure.Data;
@@ -7,7 +9,7 @@ namespace ClinicScheduler.Infrastructure.Data;
 /// The EF Core DbContext - the "bridge" between your C# objects and the database.
 /// Each DbSet becomes a table. EF Core tracks changes to objects and generates SQL.
 /// </summary>
-public class ClinicDbContext : DbContext
+public class ClinicDbContext : IdentityDbContext<AppUser>
 {
     public ClinicDbContext(DbContextOptions<ClinicDbContext> options) : base(options) { }
 
@@ -19,28 +21,27 @@ public class ClinicDbContext : DbContext
     public DbSet<TreatmentPlan> TreatmentPlans => Set<TreatmentPlan>();
     public DbSet<TreatmentPlanTherapy> TreatmentPlanTherapies => Set<TreatmentPlanTherapy>();
     public DbSet<Appointment> Appointments => Set<Appointment>();
+    public DbSet<AppointmentRequest> AppointmentRequests => Set<AppointmentRequest>();
+    public DbSet<Notification> Notifications => Set<Notification>();
+    public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
-        
-        // Configure the composite primary key for the many-to-many join table
+
         modelBuilder.Entity<TreatmentPlanTherapy>()
             .HasKey(tpt => new { tpt.TreatmentPlanId, tpt.TherapyTypeId });
-        
-        // Treatment plan validation: frequency must be 2, 3, or 4
+
         modelBuilder.Entity<TreatmentPlan>()
             .ToTable(t => t.HasCheckConstraint(
                 "CK_TreatmentPlan_Frequency",
-                "\"FrequencyPerWeek\" IN  (2, 3, 4)"));
-        
-        // Treatment plan validation: total days must be 20, 30, 40, or 50
+                "\"FrequencyPerWeek\" IN (2, 3, 4)"));
+
         modelBuilder.Entity<TreatmentPlan>()
             .ToTable(t => t.HasCheckConstraint(
                 "CK_TreatmentPlan_TotalDays",
-                "\"TotalDays\" IN (20, 30, 40, 50)"));
+                "\"TotalDays\" IN (20, 30, 50)"));
 
-        // Ensure email uniqueness
         modelBuilder.Entity<Patient>()
             .HasIndex(p => p.Email)
             .IsUnique();
