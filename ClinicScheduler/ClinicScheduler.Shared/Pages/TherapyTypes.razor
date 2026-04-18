@@ -1,0 +1,169 @@
+@page "/therapy-types"
+@attribute [Authorize(Roles = "Admin,ClinicManager")]
+@inject IRepository<TherapyType> TherapyTypeRepo
+@inject ISnackbar Snackbar
+
+<PageTitle>Therapy Types</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5">Therapy Types</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenCreateDialog">
+        Add Therapy Type
+    </MudButton>
+</div>
+
+<MudDataGrid T="TherapyType" Items="_therapyTypes" Loading="_loading"
+             SortMode="SortMode.Single" Hover="true" Elevation="1">
+    <Columns>
+        <PropertyColumn Property="t => t.Name" Title="Name" />
+        <PropertyColumn Property="t => t.Specialty" Title="Specialty" />
+        <TemplateColumn Title="Description">
+            <CellTemplate>
+                <MudTooltip Text="@(context.Item.Description ?? "")">
+                    <MudText Style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                        @context.Item.Description
+                    </MudText>
+                </MudTooltip>
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Color">
+            <CellTemplate>
+                @if (!string.IsNullOrEmpty(context.Item.ColorCode))
+                {
+                    <MudChip T="string" Size="Size.Small"
+                             Style="@($"background:{context.Item.ColorCode}; color:#fff;")">
+                        @context.Item.ColorCode
+                    </MudChip>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Actions" Sortable="false">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="@(() => OpenEditDialog(context.Item))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="@(() => DeleteAsync(context.Item))" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        <MudText Class="pa-4">No therapy types found. Add one to get started.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+<MudDialog @bind-Visible="_dialogOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_isEdit ? "Edit Therapy Type" : "New Therapy Type")</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_errorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">@_errorMessage</MudAlert>
+        }
+        <MudTextField @bind-Value="_formName" Label="Name" Required="true"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField @bind-Value="_formSpecialty" Label="Specialty"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField @bind-Value="_formDescription" Label="Description" Lines="3"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField @bind-Value="_formColorCode" Label="Color Code (e.g. #4CAF50)"
+                      Variant="Variant.Outlined" Class="mb-3"
+                      Placeholder="#RRGGBB" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _dialogOpen = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">
+            @(_isEdit ? "Save" : "Create")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<TherapyType> _therapyTypes = [];
+    private bool _loading = true;
+    private bool _dialogOpen;
+    private bool _isEdit;
+    private TherapyType? _editTarget;
+    private string _formName = "";
+    private string? _formSpecialty;
+    private string? _formDescription;
+    private string? _formColorCode;
+    private string? _errorMessage;
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _therapyTypes = (await TherapyTypeRepo.GetAllAsync()).ToList();
+        _loading = false;
+    }
+
+    private void OpenCreateDialog()
+    {
+        _isEdit = false;
+        _editTarget = null;
+        _formName = "";
+        _formSpecialty = null;
+        _formDescription = null;
+        _formColorCode = null;
+        _errorMessage = null;
+        _dialogOpen = true;
+    }
+
+    private void OpenEditDialog(TherapyType t)
+    {
+        _isEdit = true;
+        _editTarget = t;
+        _formName = t.Name;
+        _formSpecialty = t.Specialty;
+        _formDescription = t.Description;
+        _formColorCode = t.ColorCode;
+        _errorMessage = null;
+        _dialogOpen = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _errorMessage = null;
+        try
+        {
+            if (_isEdit && _editTarget is not null)
+            {
+                _editTarget.UpdateDetails(_formName, _formDescription, _formSpecialty, _formColorCode);
+                await TherapyTypeRepo.UpdateAsync(_editTarget);
+            }
+            else
+            {
+                var t = new TherapyType(_formName, _formDescription, _formSpecialty, _formColorCode);
+                await TherapyTypeRepo.AddAsync(t);
+            }
+            _dialogOpen = false;
+            Snackbar.Add(_isEdit ? "Therapy type updated." : "Therapy type created.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task DeleteAsync(TherapyType t)
+    {
+        try
+        {
+            await TherapyTypeRepo.DeleteAsync(t);
+            Snackbar.Add("Therapy type deleted.", Severity.Info);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

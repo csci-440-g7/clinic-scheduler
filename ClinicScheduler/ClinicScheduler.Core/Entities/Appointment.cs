@@ -18,6 +18,9 @@ public class Appointment
     
     public int? TreatmentPlanId { get; set; }
     public TreatmentPlan? TreatmentPlan { get; set; }
+
+    public int? TherapyTypeId { get; private set; }
+    public TherapyType? TherapyType { get; private set; }
     
     /// <summary>
     /// Start time of the appointment.
@@ -46,15 +49,27 @@ public class Appointment
     /// </summary>
     private Appointment() { }
 
-    public Appointment(Patient patient, Therapist therapist, Room room, DateTime startTime, TimeSpan duration)
+    public Appointment(Patient patient, Therapist therapist, Room room, DateTime startTime, TimeSpan duration, TherapyType? therapyType = null)
     {
         Patient = patient;
+        PatientId = patient.Id;
         Therapist = therapist;
+        TherapistId = therapist.Id;
         Room = room;
+        RoomId = room.Id;
         StartTime = startTime;
         SetDuration(duration);
         Status = AppointmentStatus.Scheduled;
-        HasConflict = false; // Initially, assume no conflict. A separate service would detect and set this.
+        HasConflict = false;
+        TherapyType = therapyType;
+        TherapyTypeId = therapyType?.Id;
+    }
+
+    public void SetTherapyType(TherapyType? therapyType)
+    {
+        TherapyType = therapyType;
+        TherapyTypeId = therapyType?.Id;
+        UpdatedAt = DateTime.UtcNow;
     }
 
     public void SetDuration(TimeSpan duration)

@@ -5,17 +5,20 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicScheduler.Web.Api;
 
+/// <summary>Manages patient resources.</summary>
 [ApiController]
 [Route("api/[controller]")]
 public class PatientsController : ControllerBase
 {
     private readonly IRepository<Patient> _repository;
 
+    /// <summary>Initializes a new instance of <see cref="PatientsController"/>.</summary>
     public PatientsController(IRepository<Patient> repository)
     {
         _repository = repository;
     }
 
+    /// <summary>Returns all patients.</summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<PatientDto>>> GetAll(CancellationToken ct)
     {
@@ -23,6 +26,7 @@ public class PatientsController : ControllerBase
         return Ok(patients.Select(static p => MapToDto(p)).ToList());
     }
 
+    /// <summary>Returns a single patient by ID.</summary>
     [HttpGet("{id:int}")]
     public async Task<ActionResult<PatientDto>> GetById(int id, CancellationToken ct)
     {
@@ -30,6 +34,7 @@ public class PatientsController : ControllerBase
         return patient is null ? NotFound() : Ok(MapToDto(patient));
     }
 
+    /// <summary>Creates a new patient record.</summary>
     [HttpPost]
     public async Task<ActionResult<PatientDto>> Create(CreatePatientRequest request, CancellationToken ct)
     {
@@ -38,6 +43,7 @@ public class PatientsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
     }
 
+    /// <summary>Updates a patient's personal and contact information.</summary>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, UpdatePatientRequest request, CancellationToken ct)
     {
@@ -51,6 +57,7 @@ public class PatientsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Deletes a patient record.</summary>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {

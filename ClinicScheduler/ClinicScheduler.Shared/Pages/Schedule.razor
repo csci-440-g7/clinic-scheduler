@@ -1,0 +1,482 @@
+@page "/schedule"
+@attribute [Authorize(Roles = "Admin,ClinicManager,Staff,Therapist")]
+@inject ClinicDbContext DbContext
+@inject AppointmentSchedulingService SchedulingService
+@inject IRepository<Patient> PatientRepo
+@inject IRepository<Therapist> TherapistRepo
+@inject IRepository<Room> RoomRepo
+@inject IRepository<TherapyType> TherapyTypeRepo
+@inject ISnackbar Snackbar
+@inject AuthenticationStateProvider AuthStateProvider
+
+<PageTitle>Schedule</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5">Schedule</MudText>
+    <div class="d-flex align-center gap-2">
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronLeft" OnClick="PrevWeek" />
+        <MudText Typo="Typo.subtitle1">
+            @_currentWeekStart.ToString("MMM d") – @_currentWeekStart.AddDays(6).ToString("MMM d, yyyy")
+        </MudText>
+        <MudIconButton Icon="@Icons.Material.Filled.ChevronRight" OnClick="NextWeek" />
+        <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="GoToToday">Today</MudButton>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+}
+
+<MudPaper Elevation="1" Class="overflow-auto">
+    <div style="display:grid; grid-template-columns: 72px repeat(7, minmax(120px, 1fr)); min-width:900px;">
+
+        <!-- Header row -->
+        <div style="border-bottom:1px solid #e0e0e0; padding:8px;"></div>
+        @for (int d = 0; d < 7; d++)
+        {
+            var day = _currentWeekStart.AddDays(d);
+            var isToday = day.Date == DateTime.UtcNow.Date;
+            <div style="border-bottom:1px solid #e0e0e0; border-left:1px solid #e0e0e0; padding:8px; text-align:center;
+                        @(isToday ? "background:#e3f2fd;" : "")">
+                <MudText Typo="Typo.caption" Class="mud-text-secondary">@day.ToString("ddd")</MudText>
+                <MudText Typo="Typo.subtitle2" Color="@(isToday ? Color.Primary : Color.Default)">
+                    @day.Day
+                </MudText>
+            </div>
+        }
+
+        <!-- Time slot rows -->
+        @foreach (var (hour, minute, label) in _timeSlots)
+        {
+            <div style="border-top:1px solid #f5f5f5; padding:4px 6px; font-size:11px; color:#999; white-space:nowrap; line-height:72px;">
+                @label
+            </div>
+            @for (int d = 0; d < 7; d++)
+            {
+                var day = _currentWeekStart.AddDays(d);
+                var slotAppts = GetAppointmentsForSlot(day, hour, minute);
+                var isWeekend = day.DayOfWeek is DayOfWeek.Saturday or DayOfWeek.Sunday;
+                var isToday = day.Date == DateTime.UtcNow.Date;
+                var capturedDay = day;
+                var capturedHour = hour;
+                var capturedMinute = minute;
+
+                <div style="border-top:1px solid #f5f5f5; border-left:1px solid #e0e0e0; padding:3px;
+                            min-height:72px; cursor:@(isWeekend ? "default" : "pointer");
+                            background:@(isWeekend ? "#fafafa" : isToday ? "#f8fbff" : "white");"
+                     @onclick="@(() => { if (!isWeekend) OpenCreateDialog(capturedDay, capturedHour, capturedMinute); })">
+                    @foreach (var appt in slotAppts)
+                    {
+                        var capturedAppt = appt;
+                        <div style="background:@StatusBg(appt.Status); color:white; border-radius:4px;
+                                    padding:5px 7px; margin:2px 0; line-height:1.4; overflow:hidden;"
+                             @onclick:stopPropagation="true">
+
+                            <!-- Patient name as clickable link -->
+                            <div style="font-size:12px; font-weight:600; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                <a href="/patients/@appt.PatientId/profile"
+                                   style="color:white; text-decoration:underline; text-decoration-color:rgba(255,255,255,0.6);"
+                                   @onclick:stopPropagation="true">
+                                    @appt.Patient?.FullName
+                                </a>
+                            </div>
+
+                            <div style="font-size:11px; opacity:0.9; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                @appt.Therapist?.FullName
+                            </div>
+                            <div style="font-size:11px; opacity:0.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+                                @appt.Room?.Name &middot; @appt.StartTime.ToString("h:mm") – @appt.EndTime.ToString("h:mm tt")
+                            </div>
+                            @if (appt.TherapyType is not null)
+                            {
+                                <div style="font-size:10px; opacity:0.85; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:2px;">
+                                    @appt.TherapyType.Name
+                                </div>
+                            }
+
+                            <!-- Action menu -->
+                            <div class="d-flex justify-end mt-1" @onclick:stopPropagation="true">
+                                <MudMenu Icon="@Icons.Material.Filled.MoreVert"
+                                         Size="Size.Small"
+                                         IconColor="Color.Inherit"
+                                         Dense="true"
+                                         AnchorOrigin="Origin.BottomRight"
+                                         TransformOrigin="Origin.TopRight">
+                                    @if (appt.Status == AppointmentStatus.Scheduled || appt.Status == AppointmentStatus.Rescheduled)
+                                    {
+                                        <MudMenuItem Icon="@Icons.Material.Filled.CheckCircle"
+                                                     OnClick="@(() => CompleteAppointmentAsync(capturedAppt))">
+                                            Mark Completed
+                                        </MudMenuItem>
+                                        <MudMenuItem Icon="@Icons.Material.Filled.EventBusy"
+                                                     OnClick="@(() => OpenMarkMissedDialog(capturedAppt))">
+                                            Mark Missed
+                                        </MudMenuItem>
+                                        <MudMenuItem Icon="@Icons.Material.Filled.Cancel"
+                                                     OnClick="@(() => CancelAppointmentAsync(capturedAppt))">
+                                            Cancel
+                                        </MudMenuItem>
+                                    }
+                                    else
+                                    {
+                                        <MudMenuItem Disabled="true">No actions available</MudMenuItem>
+                                    }
+                                </MudMenu>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+        }
+    </div>
+</MudPaper>
+
+<!-- Legend -->
+<div class="d-flex gap-3 mt-3 flex-wrap">
+    @foreach (var (status, color) in _legend)
+    {
+        <div class="d-flex align-center gap-1">
+            <div style="width:12px; height:12px; border-radius:2px; background:@color;"></div>
+            <MudText Typo="Typo.caption">@status</MudText>
+        </div>
+    }
+</div>
+
+<!-- Create appointment dialog -->
+<MudDialog @bind-Visible="_createDialogOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">
+            New Appointment — @_selectedSlotStart.ToString("ddd, MMM d h:mm tt")
+        </MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_errorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">@_errorMessage</MudAlert>
+        }
+        <MudSelect T="int" @bind-Value="_newPatientId" Label="Patient" Required="true"
+                   Variant="Variant.Outlined" Class="mb-3">
+            @foreach (var p in _allPatients)
+            {
+                <MudSelectItem T="int" Value="@p.Id">@p.FullName</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="int" @bind-Value="_newTherapistId" Label="Therapist" Required="true"
+                   Variant="Variant.Outlined" Class="mb-3">
+            @foreach (var t in _allTherapists)
+            {
+                <MudSelectItem T="int" Value="@t.Id">@t.FullName</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="int" @bind-Value="_newRoomId" Label="Room" Required="true"
+                   Variant="Variant.Outlined" Class="mb-3">
+            @foreach (var r in _allRooms)
+            {
+                <MudSelectItem T="int" Value="@r.Id">@r.Name</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="int?" @bind-Value="_newTherapyTypeId" Label="Therapy Type (optional)"
+                   Variant="Variant.Outlined" Class="mb-3" Clearable="true">
+            @foreach (var tt in _allTherapyTypes)
+            {
+                <MudSelectItem T="int?" Value="@((int?)tt.Id)">@tt.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _createDialogOpen = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateAppointmentAsync">
+            Book
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- Mark Missed confirmation dialog -->
+<MudDialog @bind-Visible="_markMissedDialogOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Mark Appointment as Missed</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_missedError is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">@_missedError</MudAlert>
+        }
+        <MudText Class="mb-3">
+            Mark <b>@_missedTarget?.Patient?.FullName</b>'s appointment on
+            <b>@_missedTarget?.StartTime.ToString("ddd, MMM d h:mm tt")</b> as missed?
+        </MudText>
+        <MudAlert Severity="Severity.Info">
+            The system will automatically find the next available slot and schedule a replacement appointment.
+        </MudAlert>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _markMissedDialogOpen = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="ConfirmMarkMissedAsync">
+            Mark Missed &amp; Reschedule
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private DateTime _currentWeekStart;
+    private List<(int Hour, int Minute, string Label)> _timeSlots = [];
+    private List<Appointment> _appointments = [];
+    private bool _loading = true;
+
+    // Create dialog
+    private bool _createDialogOpen;
+    private DateTime _selectedSlotStart;
+    private int _newPatientId;
+    private int _newTherapistId;
+    private int _newRoomId;
+    private int? _newTherapyTypeId;
+    private string? _errorMessage;
+
+    // Mark missed dialog
+    private bool _markMissedDialogOpen;
+    private Appointment? _missedTarget;
+    private string? _missedError;
+
+    private List<Patient> _allPatients = [];
+    private List<Therapist> _allTherapists = [];
+    private List<Room> _allRooms = [];
+    private List<TherapyType> _allTherapyTypes = [];
+    private string? _currentUserId;
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    private static readonly (string Status, string Color)[] _legend =
+    [
+        ("Scheduled",   "#1976D2"),
+        ("Completed",   "#388E3C"),
+        ("Missed",      "#F57C00"),
+        ("Canceled",    "#D32F2F"),
+        ("Rescheduled", "#455A64"),
+    ];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        _currentUserId = auth.User.FindFirst(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+        var isTherapist = auth.User.IsInRole("Therapist");
+
+        var today = DateTime.UtcNow.Date;
+        var daysFromMonday = ((int)today.DayOfWeek + 6) % 7;
+        _currentWeekStart = today.AddDays(-daysFromMonday);
+
+        BuildTimeSlots();
+        await LoadAppointmentsAsync();
+
+        _allPatients     = (await PatientRepo.GetAllAsync()).ToList();
+        _allTherapyTypes = (await TherapyTypeRepo.GetAllAsync()).ToList();
+        _allRooms        = (await RoomRepo.GetAllAsync()).ToList();
+
+        var allTherapists = (await TherapistRepo.GetAllAsync()).ToList();
+        if (isTherapist)
+        {
+            // Therapists only see themselves in the booking dialog
+            var userName = auth.User.Identity?.Name;
+            var myTherapist = allTherapists.FirstOrDefault(t => t.Email == userName);
+            _allTherapists = myTherapist is not null ? [myTherapist] : allTherapists;
+        }
+        else
+        {
+            _allTherapists = allTherapists;
+        }
+
+        if (_allPatients.Count > 0)   _newPatientId   = _allPatients[0].Id;
+        if (_allTherapists.Count > 0) _newTherapistId = _allTherapists[0].Id;
+        if (_allRooms.Count > 0)      _newRoomId      = _allRooms[0].Id;
+    }
+
+    private void BuildTimeSlots()
+    {
+        _timeSlots = [];
+        for (int h = 8; h < 17; h++)
+        {
+            _timeSlots.Add((h, 0,  $"{(h > 12 ? h - 12 : h)}:00 {(h >= 12 ? "PM" : "AM")}"));
+            _timeSlots.Add((h, 30, $"{(h > 12 ? h - 12 : h)}:30 {(h >= 12 ? "PM" : "AM")}"));
+        }
+    }
+
+    private async Task LoadAppointmentsAsync()
+    {
+        _loading = true;
+        var weekEnd = _currentWeekStart.AddDays(7);
+        _appointments = await DbContext.Appointments
+            .Include(a => a.Patient)
+            .Include(a => a.Therapist)
+            .Include(a => a.Room)
+            .Include(a => a.TherapyType)
+            .Where(a => a.StartTime >= _currentWeekStart && a.StartTime < weekEnd)
+            .OrderBy(a => a.StartTime)
+            .ToListAsync();
+        _loading = false;
+    }
+
+    private IEnumerable<Appointment> GetAppointmentsForSlot(DateTime day, int hour, int minute)
+    {
+        var slotStart = day.Date.AddHours(hour).AddMinutes(minute);
+        var slotEnd   = slotStart.AddMinutes(30);
+        return _appointments.Where(a => a.StartTime >= slotStart && a.StartTime < slotEnd);
+    }
+
+    private async Task PrevWeek()  { _currentWeekStart = _currentWeekStart.AddDays(-7); await LoadAppointmentsAsync(); }
+    private async Task NextWeek()  { _currentWeekStart = _currentWeekStart.AddDays(7);  await LoadAppointmentsAsync(); }
+    private async Task GoToToday()
+    {
+        var today = DateTime.UtcNow.Date;
+        _currentWeekStart = today.AddDays(-(((int)today.DayOfWeek + 6) % 7));
+        await LoadAppointmentsAsync();
+    }
+
+    private void OpenCreateDialog(DateTime day, int hour, int minute)
+    {
+        _selectedSlotStart = day.Date.AddHours(hour).AddMinutes(minute);
+        _errorMessage      = null;
+        _newTherapyTypeId  = null;
+        _createDialogOpen  = true;
+    }
+
+    private async Task CreateAppointmentAsync()
+    {
+        _errorMessage = null;
+        try
+        {
+            TherapyType? therapyType = _newTherapyTypeId.HasValue
+                ? _allTherapyTypes.FirstOrDefault(tt => tt.Id == _newTherapyTypeId.Value)
+                : null;
+
+            await SchedulingService.CreateAppointmentAsync(
+                _newPatientId, _newTherapistId, _newRoomId,
+                _selectedSlotStart, TimeSpan.FromMinutes(30),
+                therapyType: therapyType);
+
+            _createDialogOpen = false;
+            Snackbar.Add("Appointment booked.", Severity.Success);
+            await LoadAppointmentsAsync();
+        }
+        catch (InvalidOperationException ex) { _errorMessage = ex.Message; }
+        catch (ArgumentException ex)         { _errorMessage = ex.Message; }
+    }
+
+    private async Task CompleteAppointmentAsync(Appointment appt)
+    {
+        try
+        {
+            var tracked = await DbContext.Appointments.FindAsync(appt.Id);
+            if (tracked is null) return;
+            tracked.Complete();
+            await DbContext.SaveChangesAsync();
+            Snackbar.Add("Appointment marked as completed.", Severity.Success);
+            await LoadAppointmentsAsync();
+        }
+        catch (InvalidOperationException ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private async Task CancelAppointmentAsync(Appointment appt)
+    {
+        try
+        {
+            var tracked = await DbContext.Appointments.FindAsync(appt.Id);
+            if (tracked is null) return;
+            tracked.Cancel();
+
+            // Notify patient
+            await CreatePatientNotificationAsync(appt,
+                NotificationType.SchedulingConflict,
+                "Appointment Canceled",
+                $"Your appointment on {appt.StartTime.ToLocalTime():ddd, MMM d h:mm tt} has been canceled.");
+
+            await DbContext.SaveChangesAsync();
+            Snackbar.Add("Appointment canceled.", Severity.Info);
+            await LoadAppointmentsAsync();
+        }
+        catch (InvalidOperationException ex) { Snackbar.Add(ex.Message, Severity.Error); }
+    }
+
+    private void OpenMarkMissedDialog(Appointment appt)
+    {
+        _missedTarget         = appt;
+        _missedError          = null;
+        _markMissedDialogOpen = true;
+    }
+
+    private async Task ConfirmMarkMissedAsync()
+    {
+        _missedError = null;
+        if (_missedTarget is null) return;
+
+        try
+        {
+            var tracked = await DbContext.Appointments
+                .Include(a => a.TherapyType)
+                .FirstOrDefaultAsync(a => a.Id == _missedTarget.Id);
+            if (tracked is null) return;
+
+            tracked.MarkAsMissed();
+            await DbContext.SaveChangesAsync();
+
+            // Auto-reschedule
+            Appointment? rescheduled = null;
+            string rescheduleMsg;
+            try
+            {
+                rescheduled = await SchedulingService.RescheduleAfterMissedAsync(tracked);
+                await DbContext.SaveChangesAsync();
+                rescheduleMsg = $"Rescheduled to {rescheduled.StartTime.ToLocalTime():ddd, MMM d h:mm tt}.";
+            }
+            catch (InvalidOperationException)
+            {
+                rescheduleMsg = "No open slot found in the next 30 days — please schedule manually.";
+            }
+
+            // Notify patient
+            await CreatePatientNotificationAsync(_missedTarget,
+                NotificationType.MissedAppointment,
+                "Appointment Missed",
+                $"Your appointment on {_missedTarget.StartTime.ToLocalTime():ddd, MMM d h:mm tt} was recorded as missed. {rescheduleMsg}",
+                rescheduled?.Id);
+
+            await DbContext.SaveChangesAsync();
+
+            _markMissedDialogOpen = false;
+            Snackbar.Add($"Marked as missed. {rescheduleMsg}", Severity.Warning);
+            await LoadAppointmentsAsync();
+        }
+        catch (Exception ex)
+        {
+            _missedError = ex.Message;
+        }
+    }
+
+    private async Task CreatePatientNotificationAsync(
+        Appointment appt,
+        NotificationType type,
+        string title,
+        string message,
+        int? relatedApptId = null)
+    {
+        // Find the AppUser whose username matches the patient's email
+        var patientEmail = appt.Patient?.Email
+            ?? (await DbContext.Patients.FindAsync(appt.PatientId))?.Email;
+        if (patientEmail is null) return;
+
+        var user = await DbContext.Users.FirstOrDefaultAsync(u => u.UserName == patientEmail);
+        if (user is null) return;
+
+        DbContext.Notifications.Add(new Notification(
+            user.Id, type, title, message, relatedApptId ?? appt.Id));
+    }
+
+    private string StatusBg(AppointmentStatus status) => status switch
+    {
+        AppointmentStatus.Scheduled   => "#1976D2",
+        AppointmentStatus.Completed   => "#388E3C",
+        AppointmentStatus.Missed      => "#F57C00",
+        AppointmentStatus.Canceled    => "#D32F2F",
+        AppointmentStatus.Rescheduled => "#455A64",
+        _                             => "#757575"
+    };
+}

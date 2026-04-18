@@ -1,11 +1,14 @@
 using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
+using ClinicScheduler.Web;
 using ClinicScheduler.Core.Services;
 using ClinicScheduler.Web.Components;
 using ClinicScheduler.Shared.Services;
 using ClinicScheduler.Web.Services;
 using ClinicScheduler.Core.Interfaces;
 using ClinicScheduler.Infrastructure.Data;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using MudBlazor.Services;
@@ -29,6 +32,66 @@ builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 // Register business logic services
 builder.Services.AddScoped<AppointmentSchedulingService>();
 builder.Services.AddScoped<MissedAppointmentService>();
+
+// Background services
+builder.Services.AddHostedService<AppointmentReminderService>();
+
+// ASP.NET Core Identity
+builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
+{
+    if (builder.Environment.IsProduction())
+    {
+        options.Password.RequireDigit = true;
+        options.Password.RequiredLength = 10;
+        options.Password.RequireNonAlphanumeric = true;
+        options.Password.RequireUppercase = true;
+    }
+    else
+    {
+        options.Password.RequireDigit = false;
+        options.Password.RequiredLength = 6;
+        options.Password.RequireNonAlphanumeric = false;
+        options.Password.RequireUppercase = false;
+    }
+    options.SignIn.RequireConfirmedAccount = false;
+})
+.AddEntityFrameworkStores<ClinicDbContext>()
+.AddDefaultTokenProviders();
+
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.LoginPath = "/login";
+    options.AccessDeniedPath = "/login";
+    options.ExpireTimeSpan = TimeSpan.FromHours(8);
+    options.SlidingExpiration = true;
+});
+
+builder.Services.AddAuthorization(options =>
+{
+    options.FallbackPolicy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+});
+
+builder.Services.AddCascadingAuthenticationState();
+
+// CORS — allow same-origin in production; configure AllowedOrigins in appsettings for external clients
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AppPolicy", policy =>
+    {
+        if (builder.Environment.IsDevelopment())
+        {
+            policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+        }
+        else
+        {
+            var origins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
+            if (origins.Length > 0)
+                policy.WithOrigins(origins).AllowAnyMethod().AllowAnyHeader().AllowCredentials();
+        }
+    });
+});
 
 // Add API Controllers
 builder.Services.AddControllers()
@@ -69,7 +132,6 @@ builder.Services.AddOpenApi(options =>
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents()
     .AddInteractiveWebAssemblyComponents();
-builder.Services.AddControllers();
 
 // Add device-specific services used by the ClinicScheduler.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
@@ -80,10 +142,40 @@ builder.Services.AddMudServices();
 var app = builder.Build();
 
 // Auto-apply EF migrations on startup (safe to run repeatedly; no-ops when up-to-date)
-using (var scope = app.Services.CreateScope())
+// In development, handle database errors gracefully to allow testing without a database
+if (app.Environment.IsDevelopment())
 {
-    var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
-    db.Database.Migrate();
+    using (var scope = app.Services.CreateScope())
+    {
+        try
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
+            var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+            var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+            var adminPassword = app.Configuration["SeedAdmin:Password"]
+                ?? throw new InvalidOperationException("SeedAdmin:Password is not configured.");
+            db.Database.Migrate();
+            await DatabaseSeeder.SeedAsync(db, userManager, roleManager, adminPassword);
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogWarning(ex, "Database migration/seed skipped: {Message}", ex.Message);
+        }
+    }
+}
+else
+{
+    using (var scope = app.Services.CreateScope())
+    {
+        var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
+        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+        var adminPassword = app.Configuration["SeedAdmin:Password"]
+            ?? throw new InvalidOperationException(
+                "SeedAdmin:Password must be set via environment variable (SeedAdmin__Password) in production.");
+        db.Database.Migrate();
+        await DatabaseSeeder.SeedAsync(db, userManager, roleManager, adminPassword);
+    }
 }
 
 // Configure the HTTP request pipeline.
@@ -111,6 +203,10 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 // HTTPS termination is handled by the load balancer in production; skip redirect in container
 if (!app.Environment.IsProduction())
     app.UseHttpsRedirection();
+
+app.UseCors("AppPolicy");
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.UseAntiforgery();
 

@@ -1,0 +1,253 @@
+@page "/reports"
+@attribute [Authorize(Roles = "Admin,ClinicManager")]
+@inject ClinicDbContext DbContext
+
+<PageTitle>Reports</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5">Reports &amp; Analytics</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Assessment"
+               Disabled="_loading"
+               OnClick="GenerateAsync">
+        Generate Report
+    </MudButton>
+</div>
+
+<!-- Date range selector -->
+<MudPaper Elevation="1" Class="pa-4 mb-4">
+    <MudGrid AlignItems="AlignItems.Center">
+        <MudItem xs="12" sm="4">
+            <MudDatePicker @bind-Date="_startDate" Label="From" Variant="Variant.Outlined"
+                           Editable="true" DateFormat="MM/dd/yyyy" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <MudDatePicker @bind-Date="_endDate" Label="To" Variant="Variant.Outlined"
+                           Editable="true" DateFormat="MM/dd/yyyy" />
+        </MudItem>
+        <MudItem xs="12" sm="4">
+            <div class="d-flex gap-2 flex-wrap">
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="SetThisMonth">This Month</MudButton>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="SetLastMonth">Last Month</MudButton>
+                <MudButton Variant="Variant.Outlined" Size="Size.Small" OnClick="SetLast30">Last 30 Days</MudButton>
+            </div>
+        </MudItem>
+    </MudGrid>
+</MudPaper>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+
+@if (_generated)
+{
+    <!-- Stat cards -->
+    <MudGrid Class="mb-4">
+        <MudItem xs="6" sm="3">
+            <MudPaper Elevation="2" Class="pa-4 rounded-lg text-center">
+                <MudText Typo="Typo.h4" Color="Color.Primary">@_totalAppointments</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Total Appointments</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Elevation="2" Class="pa-4 rounded-lg text-center">
+                <MudText Typo="Typo.h4" Color="Color.Success">@_completedCount</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Completed</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Elevation="2" Class="pa-4 rounded-lg text-center">
+                <MudText Typo="Typo.h4" Color="Color.Warning">@_missedCount</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">Missed (@MissedRate%)</MudText>
+            </MudPaper>
+        </MudItem>
+        <MudItem xs="6" sm="3">
+            <MudPaper Elevation="2" Class="pa-4 rounded-lg text-center">
+                <MudText Typo="Typo.h4" Color="Color.Info">@_newPatients</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">New Patients</MudText>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+
+    <!-- Appointments by status -->
+    <MudPaper Elevation="1" Class="mb-4">
+        <div class="pa-4 pb-2">
+            <MudText Typo="Typo.h6">Appointments by Status</MudText>
+        </div>
+        <MudTable Items="_statusBreakdown" Hover="true" Dense="true">
+            <HeaderContent>
+                <MudTh>Status</MudTh>
+                <MudTh>Count</MudTh>
+                <MudTh>% of Total</MudTh>
+            </HeaderContent>
+            <RowTemplate Context="row">
+                <MudTd>
+                    <MudChip T="string" Size="Size.Small" Color="@StatusColor(row.Status)">@row.Status</MudChip>
+                </MudTd>
+                <MudTd>@row.Count</MudTd>
+                <MudTd>@(_totalAppointments > 0 ? $"{row.Count * 100 / _totalAppointments}%" : "—")</MudTd>
+            </RowTemplate>
+        </MudTable>
+    </MudPaper>
+
+    <!-- Appointments per therapist -->
+    <MudPaper Elevation="1" Class="mb-4">
+        <div class="pa-4 pb-2">
+            <MudText Typo="Typo.h6">Appointments by Therapist</MudText>
+        </div>
+        <MudTable Items="_therapistBreakdown" Hover="true" Dense="true">
+            <HeaderContent>
+                <MudTh>Therapist</MudTh>
+                <MudTh>Total</MudTh>
+                <MudTh>Completed</MudTh>
+                <MudTh>Missed</MudTh>
+            </HeaderContent>
+            <RowTemplate Context="row">
+                <MudTd>@row.Name</MudTd>
+                <MudTd>@row.Total</MudTd>
+                <MudTd>@row.Completed</MudTd>
+                <MudTd>@row.Missed</MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="pa-4">No data.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+
+    <!-- Audit log -->
+    <MudPaper Elevation="1">
+        <div class="pa-4 pb-2">
+            <MudText Typo="Typo.h6">Audit Log</MudText>
+            <MudText Typo="Typo.body2" Class="mud-text-secondary">@_auditLogs.Count entries in period</MudText>
+        </div>
+        <MudTable Items="_auditLogs" Hover="true" Dense="true">
+            <HeaderContent>
+                <MudTh>Timestamp</MudTh>
+                <MudTh>Entity</MudTh>
+                <MudTh>ID</MudTh>
+                <MudTh>Action</MudTh>
+                <MudTh>Changes</MudTh>
+            </HeaderContent>
+            <RowTemplate Context="log">
+                <MudTd>@log.Timestamp.ToLocalTime().ToString("MMM d, h:mm tt")</MudTd>
+                <MudTd>@log.EntityName</MudTd>
+                <MudTd>@log.EntityId</MudTd>
+                <MudTd>
+                    <MudChip T="string" Size="Size.Small"
+                             Color="@(log.Action == AuditAction.Deleted ? Color.Error : log.Action == AuditAction.Created ? Color.Success : Color.Default)">
+                        @log.Action
+                    </MudChip>
+                </MudTd>
+                <MudTd Style="max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">
+                    <MudTooltip Text="@log.ChangeSummary">
+                        @(string.IsNullOrEmpty(log.ChangeSummary) ? "—" : log.ChangeSummary)
+                    </MudTooltip>
+                </MudTd>
+            </RowTemplate>
+            <NoRecordsContent>
+                <MudText Class="pa-4">No audit entries in this period.</MudText>
+            </NoRecordsContent>
+        </MudTable>
+    </MudPaper>
+}
+
+@code {
+    private bool _loading;
+    private bool _generated;
+    private DateTime? _startDate;
+    private DateTime? _endDate;
+
+    private int _totalAppointments;
+    private int _completedCount;
+    private int _missedCount;
+    private int _newPatients;
+    private int MissedRate => _totalAppointments > 0 ? _missedCount * 100 / _totalAppointments : 0;
+
+    private List<(AppointmentStatus Status, int Count)> _statusBreakdown = [];
+    private List<(string Name, int Total, int Completed, int Missed)> _therapistBreakdown = [];
+    private List<AuditLog> _auditLogs = [];
+
+    protected override void OnInitialized()
+    {
+        SetThisMonth();
+    }
+
+    private void SetThisMonth()
+    {
+        var now = DateTime.UtcNow;
+        _startDate = new DateTime(now.Year, now.Month, 1);
+        _endDate = _startDate.Value.AddMonths(1).AddDays(-1);
+    }
+
+    private void SetLastMonth()
+    {
+        var now = DateTime.UtcNow;
+        _startDate = new DateTime(now.Year, now.Month, 1).AddMonths(-1);
+        _endDate = new DateTime(now.Year, now.Month, 1).AddDays(-1);
+    }
+
+    private void SetLast30()
+    {
+        _endDate = DateTime.UtcNow.Date;
+        _startDate = _endDate.Value.AddDays(-30);
+    }
+
+    private async Task GenerateAsync()
+    {
+        if (_startDate is null || _endDate is null) return;
+
+        _loading = true;
+        _generated = false;
+
+        var from = _startDate.Value.ToUniversalTime();
+        var to = _endDate.Value.AddDays(1).ToUniversalTime();
+
+        var appointments = await DbContext.Appointments
+            .Include(a => a.Therapist)
+            .Where(a => a.StartTime >= from && a.StartTime < to)
+            .ToListAsync();
+
+        _totalAppointments = appointments.Count;
+        _completedCount = appointments.Count(a => a.Status == AppointmentStatus.Completed);
+        _missedCount    = appointments.Count(a => a.Status == AppointmentStatus.Missed);
+
+        _statusBreakdown = appointments
+            .GroupBy(a => a.Status)
+            .Select(g => (g.Key, g.Count()))
+            .OrderByDescending(x => x.Item2)
+            .ToList();
+
+        _therapistBreakdown = appointments
+            .GroupBy(a => a.Therapist?.FullName ?? "Unknown")
+            .Select(g => (
+                g.Key,
+                g.Count(),
+                g.Count(a => a.Status == AppointmentStatus.Completed),
+                g.Count(a => a.Status == AppointmentStatus.Missed)))
+            .OrderByDescending(x => x.Item2)
+            .ToList();
+
+        _newPatients = await DbContext.Patients
+            .CountAsync(p => p.CreatedAt >= from && p.CreatedAt < to);
+
+        _auditLogs = await DbContext.AuditLogs
+            .Where(l => l.Timestamp >= from && l.Timestamp < to)
+            .OrderByDescending(l => l.Timestamp)
+            .Take(500)
+            .ToListAsync();
+
+        _loading = false;
+        _generated = true;
+    }
+
+    private Color StatusColor(AppointmentStatus status) => status switch
+    {
+        AppointmentStatus.Scheduled   => Color.Info,
+        AppointmentStatus.Completed   => Color.Success,
+        AppointmentStatus.Canceled    => Color.Error,
+        AppointmentStatus.Missed      => Color.Warning,
+        AppointmentStatus.Rescheduled => Color.Dark,
+        _                             => Color.Default
+    };
+}

@@ -1,0 +1,273 @@
+@page "/admin/users"
+@attribute [Microsoft.AspNetCore.Authorization.Authorize(Roles = "Admin")]
+@using Microsoft.AspNetCore.Identity
+@inject UserManager<AppUser> UserManager
+@inject AuthenticationStateProvider AuthState
+@inject ISnackbar Snackbar
+
+<PageTitle>User Management</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5">User Management</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.PersonAdd"
+               OnClick="OpenCreateDialog">
+        New User
+    </MudButton>
+</div>
+
+<MudDataGrid T="AppUser" Items="_users" Loading="_loading"
+             SortMode="SortMode.Single" Hover="true" Elevation="1">
+    <Columns>
+        <TemplateColumn Title="User">
+            <CellTemplate>
+                <div class="d-flex align-center gap-2">
+                    <MudAvatar Size="Size.Small" Color="Color.Primary">
+                        @(context.Item.DisplayName.Length > 0 ? context.Item.DisplayName[0] : '?')
+                    </MudAvatar>
+                    <div>
+                        <MudText Typo="Typo.body2">@context.Item.DisplayName</MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">@context.Item.Email</MudText>
+                    </div>
+                </div>
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Role">
+            <CellTemplate>
+                @{
+                    var role = _userRoles.GetValueOrDefault(context.Item.Id, "Staff");
+                    var chipColor = role switch
+                    {
+                        "Admin"         => Color.Error,
+                        "ClinicManager" => Color.Warning,
+                        "Therapist"     => Color.Info,
+                        "Patient"       => Color.Success,
+                        _               => Color.Default
+                    };
+                    var roleLabel = role == "ClinicManager" ? "Clinic Manager" : role;
+                }
+                <MudChip T="string" Size="Size.Small" Color="@chipColor">@roleLabel</MudChip>
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Actions" Sortable="false">
+            <CellTemplate>
+                @if (context.Item.Id != _currentUserId)
+                {
+                    <MudTooltip Text="Reset Password">
+                        <MudIconButton Icon="@Icons.Material.Filled.Lock" Size="Size.Small"
+                                       OnClick="@(() => OpenResetDialog(context.Item))" />
+                    </MudTooltip>
+                    <MudTooltip Text="Delete User">
+                        <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                                       Color="Color.Error"
+                                       OnClick="@(() => DeleteAsync(context.Item))" />
+                    </MudTooltip>
+                }
+                else
+                {
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">You</MudText>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        <MudText Class="pa-4">No users found.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+<!-- Create user dialog -->
+<MudDialog @bind-Visible="_createDialogOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">New User</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_dialogError is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">@_dialogError</MudAlert>
+        }
+        <MudTextField @bind-Value="_formDisplayName" Label="Display Name" Required="true"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField @bind-Value="_formEmail" Label="Email" Required="true"
+                      Variant="Variant.Outlined" InputType="InputType.Email" Class="mb-3" />
+        <MudSelect T="string" @bind-Value="_formRole" Label="Role" Variant="Variant.Outlined" Class="mb-3">
+            <MudSelectItem T="string" Value="@("Admin")">Admin</MudSelectItem>
+            <MudSelectItem T="string" Value="@("ClinicManager")">Clinic Manager</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Therapist")">Therapist</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Staff")">Staff</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Patient")">Patient</MudSelectItem>
+        </MudSelect>
+        <MudTextField @bind-Value="_formPassword" Label="Password" Required="true"
+                      Variant="Variant.Outlined" InputType="InputType.Password" Class="mb-3" />
+        <MudTextField @bind-Value="_formConfirmPassword" Label="Confirm Password" Required="true"
+                      Variant="Variant.Outlined" InputType="InputType.Password" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _createDialogOpen = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="CreateUserAsync">
+            Create
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+<!-- Reset password dialog -->
+<MudDialog @bind-Visible="_resetDialogOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">Reset Password — @_resetTarget?.DisplayName</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_dialogError is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">@_dialogError</MudAlert>
+        }
+        <MudTextField @bind-Value="_formPassword" Label="New Password" Required="true"
+                      Variant="Variant.Outlined" InputType="InputType.Password" Class="mb-3" />
+        <MudTextField @bind-Value="_formConfirmPassword" Label="Confirm Password" Required="true"
+                      Variant="Variant.Outlined" InputType="InputType.Password" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _resetDialogOpen = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Warning" OnClick="ResetPasswordAsync">
+            Reset
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<AppUser> _users = [];
+    private Dictionary<string, string> _userRoles = [];
+    private bool _loading = true;
+    private string? _currentUserId;
+
+    private bool _createDialogOpen;
+    private bool _resetDialogOpen;
+    private AppUser? _resetTarget;
+    private string? _dialogError;
+
+    private string _formDisplayName = "";
+    private string _formEmail = "";
+    private string _formRole = "Staff";
+    private string _formPassword = "";
+    private string _formConfirmPassword = "";
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        _currentUserId = UserManager.GetUserId(authState.User);
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _users = UserManager.Users.ToList();
+        _userRoles = [];
+        foreach (var user in _users)
+        {
+            var roles = await UserManager.GetRolesAsync(user);
+            _userRoles[user.Id] = roles.FirstOrDefault() ?? "Staff";
+        }
+        _loading = false;
+    }
+
+    private void OpenCreateDialog()
+    {
+        _formDisplayName = "";
+        _formEmail = "";
+        _formRole = "Staff";
+        _formPassword = "";
+        _formConfirmPassword = "";
+        _dialogError = null;
+        _createDialogOpen = true;
+    }
+
+    private void OpenResetDialog(AppUser user)
+    {
+        _resetTarget = user;
+        _formPassword = "";
+        _formConfirmPassword = "";
+        _dialogError = null;
+        _resetDialogOpen = true;
+    }
+
+    private async Task CreateUserAsync()
+    {
+        _dialogError = null;
+        if (string.IsNullOrWhiteSpace(_formDisplayName) || string.IsNullOrWhiteSpace(_formEmail))
+        {
+            _dialogError = "Display name and email are required.";
+            return;
+        }
+        if (_formPassword != _formConfirmPassword)
+        {
+            _dialogError = "Passwords do not match.";
+            return;
+        }
+        try
+        {
+            var user = new AppUser
+            {
+                UserName = _formEmail,
+                Email = _formEmail,
+                DisplayName = _formDisplayName,
+                EmailConfirmed = true
+            };
+            var result = await UserManager.CreateAsync(user, _formPassword);
+            if (!result.Succeeded)
+            {
+                _dialogError = string.Join(" ", result.Errors.Select(e => e.Description));
+                return;
+            }
+            await UserManager.AddToRoleAsync(user, _formRole);
+            _createDialogOpen = false;
+            Snackbar.Add($"User {_formDisplayName} created.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _dialogError = ex.Message;
+        }
+    }
+
+    private async Task ResetPasswordAsync()
+    {
+        _dialogError = null;
+        if (_resetTarget is null) return;
+        if (_formPassword != _formConfirmPassword)
+        {
+            _dialogError = "Passwords do not match.";
+            return;
+        }
+        try
+        {
+            var token = await UserManager.GeneratePasswordResetTokenAsync(_resetTarget);
+            var result = await UserManager.ResetPasswordAsync(_resetTarget, token, _formPassword);
+            if (!result.Succeeded)
+            {
+                _dialogError = string.Join(" ", result.Errors.Select(e => e.Description));
+                return;
+            }
+            _resetDialogOpen = false;
+            Snackbar.Add($"Password reset for {_resetTarget.DisplayName}.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            _dialogError = ex.Message;
+        }
+    }
+
+    private async Task DeleteAsync(AppUser user)
+    {
+        try
+        {
+            await UserManager.DeleteAsync(user);
+            Snackbar.Add($"User {user.DisplayName} deleted.", Severity.Info);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

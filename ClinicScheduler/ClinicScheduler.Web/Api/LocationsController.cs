@@ -5,17 +5,20 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicScheduler.Web.Api;
 
+/// <summary>Manages clinic location resources.</summary>
 [ApiController]
 [Route("api/[controller]")]
 public class LocationsController : ControllerBase
 {
     private readonly IRepository<Location> _repository;
 
+    /// <summary>Initializes a new instance of <see cref="LocationsController"/>.</summary>
     public LocationsController(IRepository<Location> repository)
     {
         _repository = repository;
     }
 
+    /// <summary>Returns all clinic locations.</summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<LocationDto>>> GetAll(CancellationToken ct)
     {
@@ -23,6 +26,7 @@ public class LocationsController : ControllerBase
         return Ok(locations.Select(static x => MapToDto(x)).ToList());
     }
 
+    /// <summary>Returns a single location by ID.</summary>
     [HttpGet("{id:int}")]
     public async Task<ActionResult<LocationDto>> GetById(int id, CancellationToken ct)
     {
@@ -30,6 +34,7 @@ public class LocationsController : ControllerBase
         return location is null ? NotFound() : Ok(MapToDto(location));
     }
 
+    /// <summary>Creates a new clinic location.</summary>
     [HttpPost]
     public async Task<ActionResult<LocationDto>> Create(CreateLocationRequest request, CancellationToken ct)
     {
@@ -41,6 +46,7 @@ public class LocationsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
     }
 
+    /// <summary>Updates an existing location's details.</summary>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, UpdateLocationRequest request, CancellationToken ct)
     {
@@ -53,6 +59,7 @@ public class LocationsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Deletes a clinic location.</summary>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {

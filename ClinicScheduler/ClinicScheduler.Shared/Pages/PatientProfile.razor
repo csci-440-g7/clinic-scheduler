@@ -1,0 +1,228 @@
+@page "/patients/{Id:int}/profile"
+@attribute [Authorize(Roles = "Admin,ClinicManager,Staff,Therapist")]
+@inject ClinicDbContext DbContext
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Patient Profile</PageTitle>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+}
+else if (_patient is null)
+{
+    <MudAlert Severity="Severity.Error">Patient not found.</MudAlert>
+    <MudButton Class="mt-3" OnClick="@(() => Nav.NavigateTo("/patients"))">Back to Patients</MudButton>
+}
+else
+{
+    <div class="d-flex align-center justify-space-between mb-4">
+        <div class="d-flex align-center gap-3">
+            <MudIconButton Icon="@Icons.Material.Filled.ArrowBack"
+                           OnClick="@(() => Nav.NavigateTo("/patients"))" />
+            <MudAvatar Color="Color.Primary" Size="Size.Large">
+                @(_patient.FirstName.Length > 0 ? _patient.FirstName[0] : '?')@(_patient.LastName.Length > 0 ? _patient.LastName[0] : '?')
+            </MudAvatar>
+            <div>
+                <MudText Typo="Typo.h5">@_patient.FullName</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    DOB: @_patient.DateOfBirth.ToString("MMM d, yyyy") &bull; @_patient.Email
+                </MudText>
+            </div>
+        </div>
+    </div>
+
+    <MudGrid>
+        <!-- Contact Info -->
+        <MudItem xs="12" md="4">
+            <MudPaper Elevation="1" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Contact Information</MudText>
+                <div class="d-flex flex-column gap-2">
+                    <div>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Email</MudText>
+                        <MudText>@_patient.Email</MudText>
+                    </div>
+                    <div>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Phone</MudText>
+                        <MudText>@(_patient.Phone ?? "—")</MudText>
+                    </div>
+                    <div>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Date of Birth</MudText>
+                        <MudText>@_patient.DateOfBirth.ToString("MMMM d, yyyy")</MudText>
+                    </div>
+                </div>
+            </MudPaper>
+        </MudItem>
+
+        <!-- Active Treatment Plan -->
+        <MudItem xs="12" md="8">
+            <MudPaper Elevation="1" Class="pa-4">
+                <MudText Typo="Typo.h6" Class="mb-3">Active Treatment Plan</MudText>
+                @if (_activePlan is null)
+                {
+                    <MudText Class="mud-text-secondary">No active treatment plan.</MudText>
+                }
+                else
+                {
+                    <MudGrid>
+                        <MudItem xs="6" sm="3">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Therapist</MudText>
+                            <MudText>@_activePlan.Therapist?.FullName</MudText>
+                        </MudItem>
+                        <MudItem xs="6" sm="3">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Frequency</MudText>
+                            <MudText>@_activePlan.FrequencyPerWeek x/week</MudText>
+                        </MudItem>
+                        <MudItem xs="6" sm="3">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Duration</MudText>
+                            <MudText>@_activePlan.TotalDays days</MudText>
+                        </MudItem>
+                        <MudItem xs="6" sm="3">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Start → End</MudText>
+                            <MudText>@_activePlan.StartDate.ToString("MMM d") → @_activePlan.EndDate.ToString("MMM d, yyyy")</MudText>
+                        </MudItem>
+                        @if (_activePlan.TreatmentPlanTherapies.Any())
+                        {
+                            <MudItem xs="12">
+                                <MudText Typo="Typo.caption" Class="mud-text-secondary mb-1">Assigned Therapies</MudText>
+                                <div class="d-flex gap-2 flex-wrap mt-1">
+                                    @foreach (var tpt in _activePlan.TreatmentPlanTherapies)
+                                    {
+                                        var color = tpt.TherapyType?.ColorCode;
+                                        <MudChip T="string" Size="Size.Small"
+                                                 Style="@(!string.IsNullOrEmpty(color) ? $"background:{color};color:#fff;" : "")">
+                                            @tpt.TherapyType?.Name
+                                        </MudChip>
+                                    }
+                                </div>
+                            </MudItem>
+                        }
+                    </MudGrid>
+                }
+            </MudPaper>
+        </MudItem>
+
+        <!-- Clinical Notes -->
+        <MudItem xs="12">
+            <MudPaper Elevation="1" Class="pa-4">
+                <div class="d-flex align-center justify-space-between mb-3">
+                    <MudText Typo="Typo.h6">Clinical Notes</MudText>
+                    <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                               StartIcon="@Icons.Material.Filled.Save"
+                               OnClick="SaveNotesAsync">Save Notes</MudButton>
+                </div>
+                <MudTextField @bind-Value="_notes" Lines="5" Variant="Variant.Outlined"
+                              Placeholder="Enter clinical notes for this patient…" />
+            </MudPaper>
+        </MudItem>
+
+        <!-- Appointment History -->
+        <MudItem xs="12">
+            <MudPaper Elevation="1">
+                <div class="pa-4 pb-2">
+                    <MudText Typo="Typo.h6">Appointment History</MudText>
+                    <MudText Typo="Typo.body2" Class="mud-text-secondary">@_appointments.Count total appointments</MudText>
+                </div>
+                <MudTable Items="_appointments" Hover="true" Dense="true" Loading="_loading">
+                    <HeaderContent>
+                        <MudTh>Date &amp; Time</MudTh>
+                        <MudTh>Therapist</MudTh>
+                        <MudTh>Room</MudTh>
+                        <MudTh>Therapy Type</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh>Notes</MudTh>
+                    </HeaderContent>
+                    <RowTemplate Context="appt">
+                        <MudTd>@appt.StartTime.ToLocalTime().ToString("ddd, MMM d yyyy h:mm tt")</MudTd>
+                        <MudTd>@appt.Therapist?.FullName</MudTd>
+                        <MudTd>@appt.Room?.Name</MudTd>
+                        <MudTd>
+                            @if (appt.TherapyType is not null)
+                            {
+                                var color = appt.TherapyType.ColorCode;
+                                <MudChip T="string" Size="Size.Small"
+                                         Style="@(!string.IsNullOrEmpty(color) ? $"background:{color};color:#fff;" : "")">
+                                    @appt.TherapyType.Name
+                                </MudChip>
+                            }
+                            else
+                            {
+                                <MudText Typo="Typo.body2" Class="mud-text-secondary">—</MudText>
+                            }
+                        </MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small" Color="@StatusColor(appt.Status)">
+                                @appt.Status
+                            </MudChip>
+                        </MudTd>
+                        <MudTd>
+                            <MudText Typo="Typo.body2">@(string.IsNullOrWhiteSpace(appt.Notes) ? "—" : appt.Notes)</MudText>
+                        </MudTd>
+                    </RowTemplate>
+                    <NoRecordsContent>
+                        <MudText Class="pa-4">No appointments on record.</MudText>
+                    </NoRecordsContent>
+                </MudTable>
+            </MudPaper>
+        </MudItem>
+    </MudGrid>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private bool _loading = true;
+    private Patient? _patient;
+    private TreatmentPlan? _activePlan;
+    private List<Appointment> _appointments = [];
+    private string? _notes;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _patient = await DbContext.Patients.FindAsync(Id);
+        if (_patient is null)
+        {
+            _loading = false;
+            return;
+        }
+
+        _notes = _patient.Notes;
+
+        _activePlan = await DbContext.TreatmentPlans
+            .Include(p => p.Therapist)
+            .Include(p => p.TreatmentPlanTherapies)
+                .ThenInclude(tpt => tpt.TherapyType)
+            .Where(p => p.PatientId == Id)
+            .OrderByDescending(p => p.StartDate)
+            .FirstOrDefaultAsync();
+
+        _appointments = await DbContext.Appointments
+            .Include(a => a.Therapist)
+            .Include(a => a.Room)
+            .Include(a => a.TherapyType)
+            .Where(a => a.PatientId == Id)
+            .OrderByDescending(a => a.StartTime)
+            .ToListAsync();
+
+        _loading = false;
+    }
+
+    private async Task SaveNotesAsync()
+    {
+        if (_patient is null) return;
+        _patient.UpdateNotes(_notes);
+        await DbContext.SaveChangesAsync();
+        Snackbar.Add("Notes saved.", Severity.Success);
+    }
+
+    private Color StatusColor(AppointmentStatus status) => status switch
+    {
+        AppointmentStatus.Scheduled   => Color.Info,
+        AppointmentStatus.Completed   => Color.Success,
+        AppointmentStatus.Canceled    => Color.Error,
+        AppointmentStatus.Missed      => Color.Warning,
+        AppointmentStatus.Rescheduled => Color.Dark,
+        _                             => Color.Default
+    };
+}

@@ -20,6 +20,7 @@ public sealed class CreateRoomRequest
     /// Maximum number of occupants the room supports.
     /// </summary>
     /// <example>4</example>
+    [Range(1, int.MaxValue, ErrorMessage = "Capacity must be at least 1.")]
     public int Capacity { get; init; }
     
     /// <summary>
