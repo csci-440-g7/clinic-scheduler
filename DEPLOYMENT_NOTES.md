@@ -3,16 +3,16 @@
 ## Architecture
 
 ```
-Internet (port 8080)
+Internet (port 8081)
     → EC2 t3.small  (us-east-1, Amazon Linux 2023)
         └── Docker Compose
-               ├── ClinicScheduler.Web  — ASP.NET Core 10 Blazor app (port 8080)
+               ├── ClinicScheduler.Web  — ASP.NET Core 10 Blazor app (port 8080 internal, 8081 external)
                └── PostgreSQL 17-alpine — database (port 5432, internal only)
 ```
 
 - **Region:** us-east-1
 - **Key pair:** `clinic-capstone-key` (`.pem` stored locally)
-- **Access:** `http://<EC2-public-IP>:8080`
+- **Access:** `http://<EC2-public-IP>:8081`
 - **Domain / HTTPS:** deferred — wire up Nginx + Let's Encrypt when ready
 
 ---
@@ -42,7 +42,7 @@ Internet (port 8080)
    | Type | Protocol | Port | Source | Purpose |
    |---|---|---|---|---|
    | SSH | TCP | 22 | My IP | Admin access |
-   | Custom TCP | TCP | 8080 | 0.0.0.0/0 | App (HTTP) |
+   | Custom TCP | TCP | 8081 | 0.0.0.0/0 | App (HTTP) |
 
 4. Under **Configure storage:** keep default (8 GB gp3 is fine).
 5. Click **Launch instance**.
@@ -71,7 +71,7 @@ icacls "C:\painpi\clinic-capstone-key.pem" /inheritance:r /grant:r "$($env:USERN
 Once logged in to EC2, run the bootstrap in one command:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/csci-440-g7/clinic-scheduler/main/deploy/bootstrap.sh | bash
+curl -fsSL https://raw.githubusercontent.com/csci-440-g7/clinic-scheduler/MVP/deploy/bootstrap.sh | bash
 ```
 
 Or if you prefer to inspect it first:
@@ -127,10 +127,12 @@ bash /home/ec2-user/clinic-scheduler/deploy/start.sh
 
 This script:
 1. Validates `.env` has no placeholder `changeme` values
-2. Pulls latest code from `main`
-3. Runs `docker-compose up --build -d`
+2. Pulls latest code from `MVP`
+3. Stops existing containers and prunes dangling Docker images (cleanup)
+4. Rebuilds the Docker image with `--no-cache` to ensure all source changes are included
+5. Starts containers with `docker-compose up -d`
 
-First run takes 2–3 minutes to build the image. Subsequent runs are faster (layer cache).
+First run takes 2–3 minutes to build the image. Subsequent runs also rebuild from scratch (no cache) to guarantee the latest code is deployed.
 
 ---
 
@@ -144,7 +146,7 @@ docker ps
 docker-compose -f /home/ec2-user/clinic-scheduler/docker-compose.yml logs -f app
 ```
 
-Open in a browser: `http://<EC2-public-IP>:8080`
+Open in a browser: `http://<EC2-public-IP>:8081`
 
 You should see the login page. Log in with:
 
@@ -160,7 +162,7 @@ You should see the login page. Log in with:
 
 ## Updating the App After Code Changes
 
-Once Phase 3 (CI/CD) is set up, pushes to `main` will deploy automatically.  
+Once Phase 3 (CI/CD) is set up, pushes to `MVP` will deploy automatically.  
 Until then, update manually:
 
 ```bash
@@ -195,7 +197,7 @@ docker exec -it $(docker ps -qf "name=db") psql -U postgres -d clinic_scheduler
 ### Request Flow
 
 ```
-Browser → EC2:8080 → Docker: ClinicScheduler.Web (ASP.NET Core)
+Browser → EC2:8081 → Docker: ClinicScheduler.Web (ASP.NET Core)
                                ├── Blazor Server (SignalR)
                                ├── REST API Controllers (/api/*)
                                └── EF Core → PostgreSQL (Docker internal network)

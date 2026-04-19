@@ -25,9 +25,9 @@ echo "[3/4] Cloning repository..."
 REPO_DIR="/home/ec2-user/clinic-scheduler"
 if [ -d "$REPO_DIR" ]; then
   echo "  Repo already exists at $REPO_DIR — pulling latest..."
-  git -C "$REPO_DIR" pull origin main
+  git -C "$REPO_DIR" pull origin MVP
 else
-  git clone https://github.com/csci-440-g7/clinic-scheduler.git "$REPO_DIR"
+  git clone -b MVP https://github.com/csci-440-g7/clinic-scheduler.git "$REPO_DIR"
 fi
 sudo chown -R ec2-user:ec2-user "$REPO_DIR"
 
@@ -62,4 +62,4 @@ echo ""
 echo "  3. Start the app:"
 echo "       bash $REPO_DIR/deploy/start.sh"
 echo ""
-echo "  App will be available at: http://${PUBLIC_IP}:8080"
+echo "  App will be available at: http://${PUBLIC_IP}:8081"
