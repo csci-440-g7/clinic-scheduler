@@ -198,6 +198,7 @@ if (!app.Environment.IsProduction())
     app.UseHttpsRedirection();
 
 app.UseStaticFiles();
+app.UseBlazorFrameworkFiles();
 app.UseCors("AppPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
