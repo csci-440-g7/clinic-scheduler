@@ -103,6 +103,7 @@
                        Editable="true" DateFormat="MM/dd/yyyy" />
         <MudSelect T="int" @bind-SelectedValues="_formTherapyTypeIds"
                    Label="Therapy Types" MultiSelection="true"
+                   MultiSelectionTextFunc="@(ids => string.Join(", ", ids.Select(id => _allTherapyTypes.FirstOrDefault(t => t.Id == id)?.Name ?? id.ToString())))"
                    Variant="Variant.Outlined" Class="mb-3">
             @foreach (var tt in _allTherapyTypes)
             {
@@ -225,7 +226,8 @@
                     DbContext.TreatmentPlanTherapies.Remove(tpt);
                 foreach (var id in selectedTherapyTypeIds.Where(id => !currentIds.Contains(id)))
                 {
-                    var tt = _allTherapyTypes.First(t => t.Id == id);
+                    var tt = await DbContext.TherapyTypes.FindAsync(id)
+                        ?? throw new InvalidOperationException($"TherapyType {id} not found.");
                     plan.AddTherapy(tt);
                 }
 
@@ -241,7 +243,8 @@
                 var plan = new TreatmentPlan(patient, therapist, _formFrequency, _formTotalDays, startDate);
                 foreach (var id in selectedTherapyTypeIds)
                 {
-                    var tt = _allTherapyTypes.First(t => t.Id == id);
+                    var tt = await DbContext.TherapyTypes.FindAsync(id)
+                        ?? throw new InvalidOperationException($"TherapyType {id} not found.");
                     plan.AddTherapy(tt);
                 }
                 DbContext.TreatmentPlans.Add(plan);
