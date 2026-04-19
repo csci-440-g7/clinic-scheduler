@@ -1,7 +1,5 @@
 @page "/login"
 @attribute [AllowAnonymous]
-@using Microsoft.AspNetCore.Identity
-@inject SignInManager<AppUser> SignInManager
 @inject NavigationManager Nav
 
 <MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
@@ -13,15 +11,21 @@
             <MudAlert Severity="Severity.Error" Class="mb-4">@_errorMessage</MudAlert>
         }
 
-        <MudTextField @bind-Value="_email" Label="Email" Variant="Variant.Outlined"
-                      InputType="InputType.Email" Class="mb-4" />
-        <MudTextField @bind-Value="_password" Label="Password" Variant="Variant.Outlined"
-                      InputType="InputType.Password" Class="mb-6" />
+        <form method="post" action="/account/login">
+            <input type="hidden" name="returnUrl" value="@(ReturnUrl ?? "/")" />
 
-        <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
-                   OnClick="HandleLogin" Disabled="_loading">
-            @(_loading ? "Signing in…" : "Sign In")
-        </MudButton>
+            <MudTextField @bind-Value="_email" Label="Email" Variant="Variant.Outlined"
+                          InputType="InputType.Email" Class="mb-4"
+                          name="email" />
+            <MudTextField @bind-Value="_password" Label="Password" Variant="Variant.Outlined"
+                          InputType="InputType.Password" Class="mb-6"
+                          name="password" />
+
+            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled"
+                       Color="Color.Primary" FullWidth="true">
+                Sign In
+            </MudButton>
+        </form>
     </MudPaper>
 </MudContainer>
 
@@ -29,29 +33,20 @@
     private string _email = "";
     private string _password = "";
     private string? _errorMessage;
-    private bool _loading;
 
     [SupplyParameterFromQuery(Name = "returnUrl")]
     private string? ReturnUrl { get; set; }
 
-    private async Task HandleLogin()
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? Error { get; set; }
+
+    protected override void OnInitialized()
     {
-        _errorMessage = null;
-        _loading = true;
-
-        var result = await SignInManager.PasswordSignInAsync(_email, _password, isPersistent: false, lockoutOnFailure: false);
-
-        if (result.Succeeded)
+        _errorMessage = Error switch
         {
-            Nav.NavigateTo(ReturnUrl ?? "/", forceLoad: true);
-        }
-        else
-        {
-            _errorMessage = result.IsLockedOut
-                ? "Account is locked. Try again later."
-                : "Invalid email or password.";
-        }
-
-        _loading = false;
+            "1" => "Invalid email or password.",
+            "2" => "Account is locked. Try again later.",
+            _ => null
+        };
     }
 }
