@@ -204,6 +204,7 @@ app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages:
 if (!app.Environment.IsProduction())
     app.UseHttpsRedirection();
 
+app.UseStaticFiles();
 app.UseCors("AppPolicy");
 app.UseAuthentication();
 app.UseAuthorization();
