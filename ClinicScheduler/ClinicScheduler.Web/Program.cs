@@ -125,8 +125,7 @@ builder.Services.AddOpenApi(options =>
 
 // Add services to the container.
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents()
-    .AddInteractiveWebAssemblyComponents();
+    .AddInteractiveServerComponents();
 
 // Add device-specific services used by the ClinicScheduler.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
@@ -214,9 +213,7 @@ app.MapControllers();
 
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode()
-    .AddInteractiveWebAssemblyRenderMode()
     .AddAdditionalAssemblies(
-        typeof(ClinicScheduler.Shared._Imports).Assembly,
-        typeof(ClinicScheduler.Web.Client._Imports).Assembly);
+        typeof(ClinicScheduler.Shared._Imports).Assembly);
 
 app.Run();
