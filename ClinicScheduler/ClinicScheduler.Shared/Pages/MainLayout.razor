@@ -1,35 +1,39 @@
 @namespace ClinicScheduler.Shared.PagesLayout
 @inherits LayoutComponentBase
-@using ClinicScheduler.Shared.Services
-@using static ClinicScheduler.Shared.Services.MockClinicData
-@inject SessionState Session
 
+<CascadingAuthenticationState>
 <div class="app-layout">
     <aside class="sidebar">
-        <h3>@ClinicShortName</h3>
+        <h3>Riverside Pain Clinic</h3>
 
-        @if (!Session.IsAuthenticated)
-        {
-            <NavLink href="/login" class="nav-item">Login</NavLink>
-        }
-        else if (Session.Role == "patient")
-        {
-            <NavLink href="/dashboard/patient?tab=calendar" class="nav-item">Dashboard</NavLink>
-            <NavLink href="/dashboard/patient?tab=profile" class="nav-item">Profile</NavLink>
-            <NavLink href="/dashboard/patient?tab=notes" class="nav-item">Notes</NavLink>
-        }
-        else if (Session.Role == "doctor")
-        {
-            <NavLink href="/dashboard/doctor?tab=calendar" class="nav-item">Dashboard</NavLink>
-            <NavLink href="/dashboard/doctor?tab=patients" class="nav-item">Patients</NavLink>
-            <NavLink href="/dashboard/doctor?tab=notes" class="nav-item">Notes</NavLink>
-        }
-        else if (Session.Role == "staff")
-        {
-            <NavLink href="/dashboard/staff?tab=calendar" class="nav-item">Dashboard</NavLink>
-            <NavLink href="/dashboard/staff?tab=doctors" class="nav-item">Doctors</NavLink>
-            <NavLink href="/dashboard/staff?tab=patients" class="nav-item">Patients</NavLink>
-        }
+        <AuthorizeView>
+            <NotAuthorized>
+                <NavLink href="/login" class="nav-item">Login</NavLink>
+            </NotAuthorized>
+            <Authorized>
+                <AuthorizeView Roles="Patient" Context="patientAuth">
+                    <Authorized Context="patientInner">
+                        <NavLink href="/dashboard/patient?tab=calendar" class="nav-item">Dashboard</NavLink>
+                        <NavLink href="/dashboard/patient?tab=profile" class="nav-item">Profile</NavLink>
+                        <NavLink href="/dashboard/patient?tab=notes" class="nav-item">Notes</NavLink>
+                    </Authorized>
+                </AuthorizeView>
+                <AuthorizeView Roles="Therapist" Context="therapistAuth">
+                    <Authorized Context="therapistInner">
+                        <NavLink href="/dashboard/doctor?tab=calendar" class="nav-item">Dashboard</NavLink>
+                        <NavLink href="/dashboard/doctor?tab=patients" class="nav-item">Patients</NavLink>
+                        <NavLink href="/dashboard/doctor?tab=notes" class="nav-item">Notes</NavLink>
+                    </Authorized>
+                </AuthorizeView>
+                <AuthorizeView Roles="Staff" Context="staffAuth">
+                    <Authorized Context="staffInner">
+                        <NavLink href="/dashboard/staff?tab=calendar" class="nav-item">Dashboard</NavLink>
+                        <NavLink href="/dashboard/staff?tab=doctors" class="nav-item">Doctors</NavLink>
+                        <NavLink href="/dashboard/staff?tab=patients" class="nav-item">Patients</NavLink>
+                    </Authorized>
+                </AuthorizeView>
+            </Authorized>
+        </AuthorizeView>
 
         <NavLink href="/settings" class="nav-item">Settings</NavLink>
     </aside>
@@ -38,18 +42,4 @@
         @Body
     </main>
 </div>
-
-@code {
-    protected override async Task OnInitializedAsync()
-    {
-        await Session.EnsureLoadedAsync();
-    }
-
-    protected override async Task OnAfterRenderAsync(bool firstRender)
-    {
-        if (firstRender)
-        {
-            await Session.EnsureLoadedAsync();
-        }
-    }
-}
+</CascadingAuthenticationState>

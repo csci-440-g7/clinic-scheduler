@@ -1,0 +1,25 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
+
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <UserSecretsId>3d76fbad-2b7e-45dc-a408-dd91c7bbd65c</UserSecretsId>
+        <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.4">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <PackageReference Include="MudBlazor" Version="9.0.0-preview.2" />
+        <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.4" />
+        <ProjectReference Include="..\ClinicScheduler.Core\ClinicScheduler.Core.csproj" />
+        <ProjectReference Include="..\ClinicScheduler.Infrastructure\ClinicScheduler.Infrastructure.csproj" />
+        <ProjectReference Include="..\ClinicScheduler.Web.Client\ClinicScheduler.Web.Client.csproj" />
+        <PackageReference Include="Microsoft.AspNetCore.Components.WebAssembly.Server" Version="10.0.0" />
+    </ItemGroup>
+
+</Project>

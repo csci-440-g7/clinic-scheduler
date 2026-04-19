@@ -1,40 +1,47 @@
 @page "/calendar"
-@inject ClinicScheduler.Shared.Services.SessionState Session
+@inject AuthenticationStateProvider AuthState
 @inject NavigationManager Nav
 
-@using ClinicScheduler.Shared.Services
-@using static ClinicScheduler.Shared.Services.MockClinicData
+@attribute [Authorize]
 
-<h1>Appointments · @ClinicShortName</h1>
+<h1>Appointments</h1>
 
-@if (!Session.IsAuthenticated)
+@{
+    var role = _userRole ?? "patient";
+}
+
+@if (role == "Patient")
 {
-    <p>Redirecting...</p>
+    <CalendarView ViewerRole="patient" />
+}
+else if (role == "Therapist")
+{
+    <CalendarView ViewerRole="doctor" />
 }
 else
 {
-    @if (Session.Role == "patient")
-    {
-        <CalendarView ViewerRole="patient" PatientId="p1" />
-    }
-    else if (Session.Role == "doctor")
-    {
-        <CalendarView ViewerRole="doctor" DoctorId="d1" />
-    }
-    else
-    {
-        <CalendarView ViewerRole="staff" />
-    }
+    <CalendarView ViewerRole="staff" />
 }
 
 @code {
+    private string? _userRole;
+
     protected override async Task OnInitializedAsync()
     {
-        await Session.EnsureLoadedAsync();
+        var authStateResult = await AuthState.GetAuthenticationStateAsync();
+        var user = authStateResult.User;
 
-        if (!Session.IsAuthenticated)
+        if (user.Identity is null || !user.Identity.IsAuthenticated)
         {
             Nav.NavigateTo("/login", true);
+            return;
         }
+
+        if (user.IsInRole("Patient"))
+            _userRole = "Patient";
+        else if (user.IsInRole("Therapist"))
+            _userRole = "Therapist";
+        else
+            _userRole = "Staff";
     }
 }

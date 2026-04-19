@@ -1,10 +1,9 @@
-@using ClinicScheduler.Shared.Services
-@inject ClinicDataStore Data
+@inject ClinicDbContext DbContext
 
 <div class="calendar-shell">
     <CalendarSidebar ViewerRole="@ViewerRole"
                      PatientId="@PatientId"
-                     DoctorId="@DoctorId"
+                     TherapistId="@EffectiveTherapistId"
                      WeekStart="@_weekStart"
                      FocusedDate="@_focusedDate"
                      SelectedId="@_selected?.Id"
@@ -49,14 +48,10 @@
                         @foreach (var appt in AppointmentsForDay(day))
                         {
                             <button type="button"
-                                    class="appt-card @ApptCss(appt.Type) @(_selected?.Id == appt.Id ? "selected" : "") @(appt.Status == "pending" ? "appt-pending" : "")"
+                                    class="appt-card @ApptCss(appt) @(_selected?.Id == appt.Id ? "selected" : "")"
                                     style="@ApptStyle(day, appt)"
                                     @onclick="() => ToggleAppointment(appt)">
-                                @if (appt.Status == "pending")
-                                {
-                                    <div class="appt-status-badge">Pending</div>
-                                }
-                                <div class="appt-title">@appt.Title</div>
+                                <div class="appt-title">@ApptTitle(appt)</div>
                                 <div class="appt-time">@FormatRange(appt)</div>
                                 <div class="appt-sub">@Subtitle(appt)</div>
                                 <div class="appt-hint">@(_selected?.Id == appt.Id ? "Hide details" : "Details")</div>
@@ -86,16 +81,15 @@
 
 @if (_showRequestForm)
 {
-    <RequestAppointmentModal PatientId="@(PatientId ?? "")"
-                             InitialDate="@_focusedDate"
+    <RequestAppointmentModal InitialDate="@_focusedDate"
                              OnClose="CloseRequestForm"
                              OnRequested="CloseRequestForm" />
 }
 
 @code {
     [Parameter] public string ViewerRole { get; set; } = "staff";
-    [Parameter] public string? PatientId { get; set; }
-    [Parameter] public string? DoctorId { get; set; }
+    [Parameter] public int? PatientId { get; set; }
+    [Parameter] public int? TherapistId { get; set; }
 
     private const int StartHour = 7;
     private const int EndHour = 19;
@@ -107,47 +101,63 @@
     private DateTime _focusedDate;
     private IEnumerable<DateTime> _weekDays => Enumerable.Range(0, 7).Select(i => _weekStart.AddDays(i));
 
-    private MockClinicData.Appointment? _selected;
+    private Appointment? _selected;
+    private List<Appointment> _weekAppointments = new();
     private bool _showBookForm;
     private bool _showRequestForm;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
         _focusedDate = DateTime.Today.Date;
         _weekStart = WeekStartMonday(_focusedDate);
+        await LoadWeekAppointmentsAsync();
     }
 
-    private void PrevWeek() { _weekStart = _weekStart.AddDays(-7); _focusedDate = _weekStart; }
-    private void NextWeek() { _weekStart = _weekStart.AddDays(7);  _focusedDate = _weekStart; }
+    private async Task PrevWeek()
+    {
+        _weekStart = _weekStart.AddDays(-7);
+        _focusedDate = _weekStart;
+        await LoadWeekAppointmentsAsync();
+    }
 
-    private void OnDateSelected(DateTime date)
+    private async Task NextWeek()
+    {
+        _weekStart = _weekStart.AddDays(7);
+        _focusedDate = _weekStart;
+        await LoadWeekAppointmentsAsync();
+    }
+
+    private async Task OnDateSelected(DateTime date)
     {
         _focusedDate = date.Date;
         _weekStart = WeekStartMonday(_focusedDate);
+        await LoadWeekAppointmentsAsync();
     }
 
-    private void OnSidebarAppointmentSelected(MockClinicData.Appointment appt) =>
-        _selected = Data.GetAppointment(appt.Id) ?? appt;
+    private void OnSidebarAppointmentSelected(Appointment appt) =>
+        _selected = _weekAppointments.FirstOrDefault(a => a.Id == appt.Id) ?? appt;
 
-    private void ToggleAppointment(MockClinicData.Appointment appt)
+    private void ToggleAppointment(Appointment appt)
     {
         if (_selected?.Id == appt.Id) { _selected = null; return; }
-        _selected = Data.GetAppointment(appt.Id) ?? appt;
+        _selected = appt;
     }
 
     private void CloseDetail() => _selected = null;
-    private void RefreshSelected()
+
+    private async Task RefreshSelected()
     {
+        await LoadWeekAppointmentsAsync();
         if (_selected is not null)
-            _selected = Data.GetAppointment(_selected.Id) ?? _selected;
+            _selected = _weekAppointments.FirstOrDefault(a => a.Id == _selected.Id);
     }
 
-    private void OnAppointmentStatusChanged()
+    private async Task OnAppointmentStatusChanged()
     {
-        // Refresh selected appointment if it was the one actioned from the sidebar.
-        RefreshSelected();
+        await RefreshSelected();
         StateHasChanged();
     }
+
     private void OpenBookForm() => _showBookForm = true;
     private void CloseBookForm() => _showBookForm = false;
     private void OpenRequestForm() => _showRequestForm = true;
@@ -159,58 +169,84 @@
         return d.AddDays(-(((int)d.DayOfWeek - (int)DayOfWeek.Monday + 7) % 7));
     }
 
-    private IEnumerable<MockClinicData.Appointment> ForViewer()
-    {
-        IEnumerable<MockClinicData.Appointment> q = Data.Appointments;
-        return ViewerRole switch
-        {
-            "patient" when !string.IsNullOrWhiteSpace(PatientId) => q.Where(a => a.PatientId == PatientId),
-            "doctor"  when !string.IsNullOrWhiteSpace(DoctorId)  => q.Where(a => a.DoctorId  == DoctorId),
-            "staff"                                               => q,
-            _                                                     => Enumerable.Empty<MockClinicData.Appointment>()
-        };
-    }
+    /// <summary>
+    /// Resolve the effective therapist ID.
+    /// </summary>
+    private int? EffectiveTherapistId => TherapistId;
 
-    private IEnumerable<MockClinicData.Appointment> AppointmentsForDay(DateTime day)
+    private async Task LoadWeekAppointmentsAsync()
     {
         var weekEnd = _weekStart.AddDays(7);
-        return ForViewer()
-            .Where(a => a.Start < weekEnd && a.End > _weekStart && a.Start.Date == day.Date)
-            .OrderBy(a => a.Start);
+
+        var query = DbContext.Appointments
+            .Include(a => a.Patient)
+            .Include(a => a.Therapist)
+            .Include(a => a.Room)
+            .Include(a => a.TherapyType)
+            .Where(a => a.StartTime < weekEnd && a.EndTime > _weekStart);
+
+        var effectiveTherapistId = EffectiveTherapistId;
+
+        query = ViewerRole switch
+        {
+            "patient" when PatientId.HasValue => query.Where(a => a.PatientId == PatientId.Value),
+            "doctor" when effectiveTherapistId.HasValue => query.Where(a => a.TherapistId == effectiveTherapistId.Value),
+            "staff" => query,
+            _ => query.Where(a => false) // no results for unknown viewer
+        };
+
+        _weekAppointments = await query.OrderBy(a => a.StartTime).ToListAsync();
     }
 
-    private string Subtitle(MockClinicData.Appointment a)
+    private IEnumerable<Appointment> AppointmentsForDay(DateTime day) =>
+        _weekAppointments.Where(a => a.StartTime.Date == day.Date).OrderBy(a => a.StartTime);
+
+    private string Subtitle(Appointment a) => ViewerRole switch
     {
-        var patient = Data.GetPatient(a.PatientId) ?? new MockClinicData.Patient("?", "Unknown", DateTime.Today, "", "", "", "");
-        var doctor  = MockClinicData.Doctors.FirstOrDefault(d => d.Id == a.DoctorId) ?? new MockClinicData.Doctor("?", "Unknown", "");
-        return ViewerRole switch
+        "patient" => a.Therapist?.FullName ?? "Unknown",
+        "doctor" => a.Patient?.FullName ?? "Unknown",
+        "staff" => $"{a.Patient?.FullName ?? "Unknown"} · {a.Therapist?.FullName ?? "Unknown"}",
+        _ => ""
+    };
+
+    private static string ApptTitle(Appointment a) =>
+        a.TherapyType?.Name ?? a.Status.ToString();
+
+    private static string ApptCss(Appointment a)
+    {
+        // Use TherapyType color code if available, otherwise fall back to status-based styling
+        if (a.TherapyType is not null)
         {
-            "patient" => doctor.Name,
-            "doctor"  => patient.Name,
-            "staff"   => $"{patient.Name} · {doctor.Name}",
-            _         => ""
+            // Map known therapy type names to CSS classes for backward compatibility
+            var name = a.TherapyType.Name.ToLowerInvariant();
+            if (name.Contains("medical") || name.Contains("therapy")) return "appt-medical";
+            if (name.Contains("lab")) return "appt-lab";
+            if (name.Contains("intake") || name.Contains("assessment")) return "appt-intake";
+            if (name.Contains("admin")) return "appt-admin";
+        }
+
+        // Fall back to status-based styling
+        return a.Status switch
+        {
+            AppointmentStatus.Scheduled => "appt-medical",
+            AppointmentStatus.Completed => "appt-lab",
+            AppointmentStatus.Canceled => "appt-admin",
+            AppointmentStatus.Missed => "appt-intake",
+            AppointmentStatus.Rescheduled => "appt-default",
+            _ => "appt-default"
         };
     }
 
-    private static string ApptCss(string type) => type switch
-    {
-        "medical" => "appt-medical",
-        "lab"     => "appt-lab",
-        "intake"  => "appt-intake",
-        "admin"   => "appt-admin",
-        _         => "appt-default"
-    };
-
     private static string FormatHour(int h) => DateTime.Today.AddHours(h).ToString("h:mm tt");
-    private static string FormatRange(MockClinicData.Appointment a) => $"{a.Start:h:mm tt} – {a.End:h:mm tt}";
+    private static string FormatRange(Appointment a) => $"{a.StartTime:h:mm tt} – {a.EndTime:h:mm tt}";
 
-    private string ApptStyle(DateTime day, MockClinicData.Appointment a)
+    private string ApptStyle(DateTime day, Appointment a)
     {
-        var startMin = (a.Start - day.Date).TotalMinutes;
-        var endMin   = (a.End   - day.Date).TotalMinutes;
+        var startMin = (a.StartTime - day.Date).TotalMinutes;
+        var endMin = (a.EndTime - day.Date).TotalMinutes;
         var visStart = Math.Max(startMin, StartHour * 60);
-        var visEnd   = Math.Min(endMin,   EndHour   * 60);
-        var top    = (visStart - StartHour * 60) / 60d * HourHeightPx;
+        var visEnd = Math.Min(endMin, EndHour * 60);
+        var top = (visStart - StartHour * 60) / 60d * HourHeightPx;
         var height = Math.Max((visEnd - visStart) / 60d * HourHeightPx, 18);
         return $"top:{top:0}px; height:{height:0}px;";
     }

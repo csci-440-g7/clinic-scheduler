@@ -135,8 +135,6 @@ builder.Services.AddRazorComponents()
 
 // Add device-specific services used by the ClinicScheduler.Shared project
 builder.Services.AddSingleton<IFormFactor, FormFactor>();
-builder.Services.AddScoped<SessionState>();
-builder.Services.AddScoped<ClinicDataStore>();
 
 builder.Services.AddMudServices();
 var app = builder.Build();

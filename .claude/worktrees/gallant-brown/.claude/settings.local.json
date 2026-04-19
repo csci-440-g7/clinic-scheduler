@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//c/painpi/clinic-scheduler/**)",
+      "Bash(docker compose *)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":8080\")",
+      "Bash(tasklist /FI \"PID eq 5368\" /FI \"PID eq 20980\" /FI \"PID eq 34040\")",
+      "Bash(tasklist)",
+      "Bash(find /c/painpi/clinic-scheduler/ClinicScheduler/ClinicScheduler.Shared -type f -name \"*.razor\" -exec grep -l \"Routes\\\\|Router\" {} \\\\;)",
+      "Bash(mkdir -p /c/localPain)",
+      "Bash(git clone *)",
+      "Bash(xargs grep *)",
+      "Bash(xargs -I {} sh -c 'echo \"=== {} ===\" && wc -l {}')",
+      "Bash(awk '{print $NF}')",
+      "Bash(xargs -I {} basename {})",
+      "Bash(git -C \"C:/painpi/clinic-scheduler/.claude/worktrees/gallant-brown\" status --short)",
+      "Bash(dotnet test *)"
+    ]
+  }
+}

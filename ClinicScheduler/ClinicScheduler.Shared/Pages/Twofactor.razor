@@ -1,7 +1,6 @@
 @page "/2fa"
 @attribute [AllowAnonymous]
 @inject NavigationManager Nav
-@inject ClinicScheduler.Shared.Services.SessionState Session
 
 <h1>Two‑Factor Authentication</h1>
 
@@ -20,15 +19,11 @@
     private string code = "";
     private string? errorMessage;
 
-    private async Task VerifyCode()
+    private void VerifyCode()
     {
         if (code == "1234")
         {
-            var role = GetRoleFromQuery() ?? Session.Role ?? "patient";
-
-            await Session.SetPreAuthAsync(role);
-            await Session.AuthenticateAsync();
-
+            var role = GetRoleFromQuery() ?? "patient";
             Nav.NavigateTo($"/dashboard/{role}");
         }
         else

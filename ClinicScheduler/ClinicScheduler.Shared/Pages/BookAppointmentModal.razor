@@ -1,5 +1,9 @@
-@using ClinicScheduler.Shared.Services
-@inject ClinicDataStore Data
+@inject ClinicDbContext DbContext
+@inject IRepository<Patient> PatientRepo
+@inject IRepository<Therapist> TherapistRepo
+@inject IRepository<Room> RoomRepo
+@inject AppointmentSchedulingService SchedulingService
+@inject ISnackbar Snackbar
 
 <div class="book-backdrop"
      @onclick="OnClose"
@@ -19,36 +23,33 @@
 
         <div class="book-fields">
             <label class="book-label">
-                Title <span class="book-req">*</span>
-                <input class="book-input" @bind="_title" placeholder="e.g. Follow-up Visit" />
-            </label>
-            <label class="book-label">
                 Patient <span class="book-req">*</span>
                 <select class="book-input" @bind="_patientId">
-                    <option value="">— select patient —</option>
-                    @foreach (var p in Data.Patients)
+                    <option value="0">— select patient —</option>
+                    @foreach (var p in _patients)
                     {
-                        <option value="@p.Id">@p.Name</option>
+                        <option value="@p.Id">@p.FullName</option>
                     }
                 </select>
             </label>
             <label class="book-label">
-                Doctor <span class="book-req">*</span>
-                <select class="book-input" @bind="_doctorId">
-                    <option value="">— select doctor —</option>
-                    @foreach (var d in MockClinicData.Doctors)
+                Therapist <span class="book-req">*</span>
+                <select class="book-input" @bind="_therapistId">
+                    <option value="0">— select therapist —</option>
+                    @foreach (var t in _therapists)
                     {
-                        <option value="@d.Id">@d.Name</option>
+                        <option value="@t.Id">@t.FullName</option>
                     }
                 </select>
             </label>
             <label class="book-label">
-                Type
-                <select class="book-input" @bind="_type">
-                    <option value="medical">Medical</option>
-                    <option value="lab">Lab / Procedure</option>
-                    <option value="intake">Intake</option>
-                    <option value="admin">Admin</option>
+                Room <span class="book-req">*</span>
+                <select class="book-input" @bind="_roomId">
+                    <option value="0">— select room —</option>
+                    @foreach (var r in _rooms)
+                    {
+                        <option value="@r.Id">@r.Name</option>
+                    }
                 </select>
             </label>
             <label class="book-label">
@@ -61,18 +62,10 @@
                     <input class="book-input" type="time" @bind="_startTime" />
                 </label>
                 <label class="book-label">
-                    End time <span class="book-req">*</span>
-                    <input class="book-input" type="time" @bind="_endTime" />
+                    Duration
+                    <input class="book-input" value="30 min" disabled />
                 </label>
             </div>
-            <label class="book-label">
-                Location
-                <input class="book-input" @bind="_location" placeholder="e.g. Pain Clinic — Main" />
-            </label>
-            <label class="book-label">
-                Room
-                <input class="book-input" @bind="_room" placeholder="e.g. 201" />
-            </label>
         </div>
 
         <div class="book-actions">
@@ -87,40 +80,53 @@
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnBooked { get; set; }
 
-    private string _title = "";
-    private string _patientId = "";
-    private string _doctorId = "";
-    private string _type = "medical";
+    private List<Patient> _patients = [];
+    private List<Therapist> _therapists = [];
+    private List<Room> _rooms = [];
+
+    private int _patientId;
+    private int _therapistId;
+    private int _roomId;
     private DateTime _date;
     private TimeOnly _startTime = new(9, 0);
-    private TimeOnly _endTime = new(9, 30);
-    private string _location = "";
-    private string _room = "";
     private string _error = "";
 
-    protected override void OnInitialized() => _date = InitialDate;
+    protected override async Task OnInitializedAsync()
+    {
+        _date = InitialDate;
+        _patients = (await PatientRepo.GetAllAsync()).ToList();
+        _therapists = (await TherapistRepo.GetAllAsync()).ToList();
+        _rooms = (await RoomRepo.GetAllAsync()).ToList();
+    }
 
-    private void Submit()
+    private async Task Submit()
     {
         _error = "";
-        if (string.IsNullOrWhiteSpace(_title))     { _error = "Title is required.";          return; }
-        if (string.IsNullOrWhiteSpace(_patientId)) { _error = "Please select a patient.";     return; }
-        if (string.IsNullOrWhiteSpace(_doctorId))  { _error = "Please select a doctor.";      return; }
-        if (_endTime <= _startTime)                { _error = "End time must be after start."; return; }
+        if (_patientId == 0)   { _error = "Please select a patient.";    return; }
+        if (_therapistId == 0) { _error = "Please select a therapist.";  return; }
+        if (_roomId == 0)      { _error = "Please select a room.";       return; }
 
-        Data.AddAppointment(new MockClinicData.Appointment(
-            $"a-{Guid.NewGuid():N}"[..10],
-            _date.Date + _startTime.ToTimeSpan(),
-            _date.Date + _endTime.ToTimeSpan(),
-            _title.Trim(),
-            _type,
-            _patientId,
-            _doctorId,
-            _location.Trim(),
-            _room.Trim(),
-            null));
+        var startDateTime = _date.Date + _startTime.ToTimeSpan();
+        var duration = TimeSpan.FromMinutes(30);
 
-        OnBooked.InvokeAsync();
+        try
+        {
+            await SchedulingService.CreateAppointmentAsync(
+                _patientId, _therapistId, _roomId,
+                startDateTime, duration);
+
+            Snackbar.Add("Appointment booked.", Severity.Success);
+            await OnBooked.InvokeAsync();
+        }
+        catch (InvalidOperationException ex)
+        {
+            _error = ex.Message;
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+        catch (ArgumentException ex)
+        {
+            _error = ex.Message;
+        }
     }
 }
 
