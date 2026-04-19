@@ -204,6 +204,25 @@ if (!app.Environment.IsProduction())
 
 app.UseStaticFiles();
 app.UseCors("AppPolicy");
+
+// Allow anonymous access to Blazor framework files (_framework/blazor.web.js, etc.)
+// These must bypass auth before UseAuthentication/UseAuthorization
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/_framework") ||
+        context.Request.Path.StartsWithSegments("/_content"))
+    {
+        // Skip auth for framework and static content paths
+        var endpoint = context.GetEndpoint();
+        if (endpoint != null)
+        {
+            // Clear the endpoint so auth middleware doesn't apply the fallback policy
+            context.SetEndpoint(null);
+        }
+    }
+    await next();
+});
+
 app.UseAuthentication();
 app.UseAuthorization();
 
