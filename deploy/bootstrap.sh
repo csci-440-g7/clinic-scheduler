@@ -1,18 +1,23 @@
 #!/bin/bash
 # Run once on a fresh Amazon Linux 2023 EC2 instance.
 # Usage: bash bootstrap.sh
-set -e
+set -euo pipefail
 
 echo "=== ClinicScheduler — EC2 Bootstrap ==="
 
-# ── Docker ────────────────────────────────────────────────────────────────────
-echo "[1/4] Installing Docker..."
+# ── .NET 10 SDK ───────────────────────────────────────────────────────────────
+echo "[1/5] Installing .NET 10 SDK..."
+sudo rpm -Uvh https://packages.microsoft.com/config/amazonlinux/2023/packages-microsoft-prod.rpm 2>/dev/null || true
+sudo dnf install -y dotnet-sdk-10.0
+
+# ── Docker (for PostgreSQL) ───────────────────────────────────────────────────
+echo "[2/5] Installing Docker..."
 sudo dnf install -y docker git
 sudo systemctl enable --now docker
 sudo usermod -aG docker ec2-user
 
 # ── Docker Compose (standalone binary) ────────────────────────────────────────
-echo "[2/4] Installing Docker Compose..."
+echo "[3/5] Installing Docker Compose..."
 COMPOSE_VERSION=$(curl -fsSL https://api.github.com/repos/docker/compose/releases/latest \
   | grep '"tag_name"' | cut -d'"' -f4)
 sudo curl -fsSL \
@@ -21,7 +26,7 @@ sudo curl -fsSL \
 sudo chmod +x /usr/local/bin/docker-compose
 
 # ── Clone repo ────────────────────────────────────────────────────────────────
-echo "[3/4] Cloning repository..."
+echo "[4/5] Cloning repository..."
 REPO_DIR="/home/ec2-user/clinic-scheduler"
 if [ -d "$REPO_DIR" ]; then
   echo "  Repo already exists at $REPO_DIR — pulling latest..."
@@ -32,7 +37,7 @@ fi
 sudo chown -R ec2-user:ec2-user "$REPO_DIR"
 
 # ── .env setup ────────────────────────────────────────────────────────────────
-echo "[4/4] Setting up .env..."
+echo "[5/5] Setting up .env..."
 ENV_FILE="$REPO_DIR/.env"
 if [ ! -f "$ENV_FILE" ]; then
   cp "$REPO_DIR/.env.example" "$ENV_FILE"
@@ -59,7 +64,10 @@ echo "     POSTGRES_PASSWORD  — any strong password"
 echo "     SEED_ADMIN_PASSWORD — min 10 chars, uppercase, digit, special char"
 echo "     ASPNETCORE_ENVIRONMENT — leave as Production"
 echo ""
-echo "  3. Start the app:"
+echo "  3. Start the app (native — recommended):"
+echo "       bash $REPO_DIR/deploy/start-native.sh"
+echo ""
+echo "     Or via Docker (has known blazor.web.js issue):"
 echo "       bash $REPO_DIR/deploy/start.sh"
 echo ""
 echo "  App will be available at: http://${PUBLIC_IP}:8081"
