@@ -103,7 +103,7 @@
                        Editable="true" DateFormat="MM/dd/yyyy" />
         <MudSelect T="int" @bind-SelectedValues="_formTherapyTypeIds"
                    Label="Therapy Types" MultiSelection="true"
-                   MultiSelectionTextFunc="@(ids => string.Join(", ", ids.Select(id => _allTherapyTypes.FirstOrDefault(t => t.Id == id)?.Name ?? id.ToString())))"
+                   MultiSelectionTextFunc="@(ids => string.Join(", ", ids.Select(s => { int.TryParse(s, out var id); return _allTherapyTypes.FirstOrDefault(t => t.Id == id)?.Name ?? s; })))"
                    Variant="Variant.Outlined" Class="mb-3">
             @foreach (var tt in _allTherapyTypes)
             {
