@@ -45,11 +45,10 @@ echo "       PostgreSQL is ready."
 echo "[3/6] Stopping existing app process..."
 sudo systemctl stop "$SERVICE_NAME" 2>/dev/null || true
 
-# Clean up failed Docker build artifacts
+# Clean up failed Docker build artifacts (app only — leave db running)
 echo "[4/6] Cleaning up Docker build artifacts..."
-docker stop app 2>/dev/null || true
-docker rm app 2>/dev/null || true
-docker compose -f "$REPO_DIR/docker-compose.yml" down --rmi local 2>/dev/null || true
+docker compose -f "$REPO_DIR/docker-compose.yml" rm -sf app 2>/dev/null || true
+docker rmi $(docker images --filter "reference=*clinic*scheduler*" -q) 2>/dev/null || true
 docker image prune -f 2>/dev/null || true
 
 # Publish the app
