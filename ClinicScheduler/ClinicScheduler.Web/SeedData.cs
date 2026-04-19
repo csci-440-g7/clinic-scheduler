@@ -104,13 +104,14 @@ public static class DatabaseSeeder
         await db.SaveChangesAsync();
 
         // ── Patients ─────────────────────────────────────────────────────────
+        var demoPatient = new Patient("Demo", "Patient", "patient@clinic.com", new DateOnly(1990, 1, 1), "555-301-2000");
         var alice = new Patient("Alice", "Johnson", "alice.johnson@email.com", new DateOnly(1985, 3, 14), "555-301-2001");
         var bob   = new Patient("Bob", "Martinez", "bob.martinez@email.com", new DateOnly(1972, 7, 22), "555-301-2002");
         var carol = new Patient("Carol", "Thompson", "carol.thompson@email.com", new DateOnly(1990, 11, 5), "555-301-2003");
         var david = new Patient("David", "Lee", "david.lee@email.com", new DateOnly(2001, 1, 30), "555-301-2004");
         var emma  = new Patient("Emma", "Wilson", "emma.wilson@email.com", new DateOnly(1967, 9, 18), "555-301-2005");
 
-        db.Patients.AddRange(alice, bob, carol, david, emma);
+        db.Patients.AddRange(demoPatient, alice, bob, carol, david, emma);
         await db.SaveChangesAsync();
 
         // ── Treatment Plans ──────────────────────────────────────────────────
