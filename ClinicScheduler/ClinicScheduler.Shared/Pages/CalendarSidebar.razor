@@ -214,7 +214,7 @@
 
     private async Task LoadSidebarAppointmentsAsync()
     {
-        var now = DateTime.Now;
+        var now = DateTime.UtcNow;
         var baseQuery = BuildViewerQuery();
 
         _recentAppointments = await baseQuery

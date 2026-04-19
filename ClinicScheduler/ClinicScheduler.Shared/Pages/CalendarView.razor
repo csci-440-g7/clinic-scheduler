@@ -108,7 +108,7 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _focusedDate = DateTime.Today.Date;
+        _focusedDate = DateTime.UtcNow.Date;
         _weekStart = WeekStartMonday(_focusedDate);
         await LoadWeekAppointmentsAsync();
     }
