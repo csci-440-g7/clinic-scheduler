@@ -106,7 +106,7 @@
         if (_therapistId == 0) { _error = "Please select a therapist.";  return; }
         if (_roomId == 0)      { _error = "Please select a room.";       return; }
 
-        var startDateTime = _date.Date + _startTime.ToTimeSpan();
+        var startDateTime = DateTime.SpecifyKind(_date.Date + _startTime.ToTimeSpan(), DateTimeKind.Utc);
         var duration = TimeSpan.FromMinutes(30);
 
         try
