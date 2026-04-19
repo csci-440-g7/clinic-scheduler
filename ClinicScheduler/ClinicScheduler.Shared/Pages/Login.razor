@@ -14,24 +14,36 @@
         <form method="post" action="/account/login">
             <input type="hidden" name="returnUrl" value="@(ReturnUrl ?? "/")" />
 
-            <MudTextField @bind-Value="_email" Label="Email" Variant="Variant.Outlined"
-                          InputType="InputType.Email" Class="mb-4"
-                          name="email" />
-            <MudTextField @bind-Value="_password" Label="Password" Variant="Variant.Outlined"
-                          InputType="InputType.Password" Class="mb-6"
-                          name="password" />
+            <div class="mud-input-control mud-input-input-control mb-4">
+                <div class="mud-input mud-input-outlined">
+                    <input type="email" name="email" required
+                           class="mud-input-slot mud-input-root mud-input-root-outlined"
+                           placeholder="Email" />
+                    <div class="mud-input-outlined-border"></div>
+                </div>
+                <label class="mud-input-label mud-input-label-outlined mud-input-label-inputcontrol">Email</label>
+            </div>
 
-            <MudButton ButtonType="ButtonType.Submit" Variant="Variant.Filled"
-                       Color="Color.Primary" FullWidth="true">
-                Sign In
-            </MudButton>
+            <div class="mud-input-control mud-input-input-control mb-6">
+                <div class="mud-input mud-input-outlined">
+                    <input type="password" name="password" required
+                           class="mud-input-slot mud-input-root mud-input-root-outlined"
+                           placeholder="Password" />
+                    <div class="mud-input-outlined-border"></div>
+                </div>
+                <label class="mud-input-label mud-input-label-outlined mud-input-label-inputcontrol">Password</label>
+            </div>
+
+            <button type="submit"
+                    class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple mud-button-filled-size-medium"
+                    style="width:100%">
+                <span class="mud-button-label">Sign In</span>
+            </button>
         </form>
     </MudPaper>
 </MudContainer>
 
 @code {
-    private string _email = "";
-    private string _password = "";
     private string? _errorMessage;
 
     [SupplyParameterFromQuery(Name = "returnUrl")]
