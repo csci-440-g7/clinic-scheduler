@@ -211,7 +211,7 @@ app.UseAuthorization();
 
 app.UseAntiforgery();
 
-app.MapStaticAssets();
+app.MapStaticAssets().AllowAnonymous();
 
 // Map API endpoints
 app.MapControllers();
