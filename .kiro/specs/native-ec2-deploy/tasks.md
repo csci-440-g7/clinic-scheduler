@@ -1,0 +1,96 @@
+# Implementation Plan
+
+- [x] 1. Write bug condition exploration test
+  - **Property 1: Bug Condition** - Native Deploy Scripts Bypass Docker App Execution
+  - **CRITICAL**: This test MUST FAIL on unfixed code - failure confirms the bug exists
+  - **DO NOT attempt to fix the test or the code when it fails**
+  - **NOTE**: This test encodes the expected behavior - it will validate the fix when it passes after implementation
+  - **GOAL**: Surface counterexamples that demonstrate the bug exists (app runs in Docker instead of natively)
+  - **Scoped PBT Approach**: Scope the property to the concrete failing case — the `deploy/start-native.sh` script must exist and must NOT use `docker-compose up` for the app service; it must use `dotnet publish` and systemd instead
+  - Write property-based test in `ClinicScheduler/ClinicScheduler.Core.Tests/NativeDeployBugConditionTests.cs` using FsCheck + xunit
+  - Test that `deploy/start-native.sh` exists and contains `dotnet publish` for native build (from Bug Condition: `deployment.appRuntime == "docker"` must be false in the native path)
+  - Test that `deploy/start-native.sh` creates a systemd service unit with `ExecStart` pointing to `dotnet ... ClinicScheduler.Web.dll`
+  - Test that `deploy/start-native.sh` starts only the `db` service via Docker Compose (not the `app` service)
+  - Test that `deploy/start-native.sh` cleans up failed Docker build artifacts (contains `docker compose down` or `docker image prune` commands to remove stale app images/containers)
+  - Test that `deploy/bootstrap.sh` installs `dotnet-sdk-10.0` (the native SDK, not Docker SDK images)
+  - Use FsCheck to generate random `.env` variable values (passwords, environment names) and verify the systemd unit correctly interpolates all values with `Host=localhost` (not `Host=db`)
+  - Run test on UNFIXED code
+  - **EXPECTED OUTCOME**: Test FAILS (confirms the deploy scripts don't yet exist or don't meet the native deployment requirements)
+  - Document counterexamples found to understand what's missing
+  - Mark task complete when test is written, run, and failure is documented
+  - _Requirements: 1.1, 1.2, 2.1, 2.2_
+
+- [x] 2. Write preservation property tests (BEFORE implementing fix)
+  - **Property 2: Preservation** - PostgreSQL Docker Config and Env Var Handling Unchanged
+  - **IMPORTANT**: Follow observation-first methodology
+  - Observe: `docker-compose.yml` uses `postgres:17-alpine` image, `clinic_db_data` volume, `pg_isready` health check, `5432:5432` port mapping on unfixed code
+  - Observe: `.env.example` defines `POSTGRES_PASSWORD`, `SEED_ADMIN_PASSWORD`, `ASPNETCORE_ENVIRONMENT` on unfixed code
+  - Observe: `deploy/start.sh` validates `.env` existence and rejects `changeme` placeholders on unfixed code
+  - Observe: `docker-compose.yml` maps host port `8081` to container port `8080` on unfixed code
+  - Write property-based tests in `ClinicScheduler/ClinicScheduler.Core.Tests/NativeDeployPreservationTests.cs` using FsCheck + xunit:
+    - Property: `docker-compose.yml` always contains `postgres:17-alpine`, `clinic_db_data` volume, `pg_isready` health check, and `5432:5432` port mapping
+    - Property: `docker-compose.yml` app service port mapping `8081:8080` is unchanged
+    - Property: `.env.example` contains all required variable names (`POSTGRES_PASSWORD`, `SEED_ADMIN_PASSWORD`, `ASPNETCORE_ENVIRONMENT`)
+    - Property: `deploy/start.sh` (Docker fallback) is not modified — validate `.env` checks and `docker-compose` commands are preserved
+    - Property: For any generated password string, the connection string pattern in `docker-compose.yml` uses `Host=db` for the Docker path (unchanged)
+  - Verify tests pass on UNFIXED code
+  - **EXPECTED OUTCOME**: Tests PASS (confirms baseline behavior to preserve)
+  - Mark task complete when tests are written, run, and passing on unfixed code
+  - _Requirements: 3.1, 3.2, 3.3, 3.4_
+
+- [x] 3. Fix for .NET 10 Docker compatibility — native EC2 deployment
+
+  - [x] 3.1 Create `deploy/bootstrap.sh` one-time EC2 setup script
+    - Install .NET 10 SDK via Microsoft package repository RPM and `dnf install dotnet-sdk-10.0`
+    - Install Docker and Docker Compose for PostgreSQL container management
+    - Add `ec2-user` to docker group, enable Docker service
+    - Clone repository from MVP branch to `/home/ec2-user/clinic-scheduler` (or pull if exists)
+    - Create `.env` from `.env.example` if not present, prompt user to edit
+    - _Bug_Condition: isBugCondition(deployment) where deployment.appRuntime == "docker" AND deployment.dotnetVersion == "10.0"_
+    - _Expected_Behavior: bootstrap.sh installs native .NET 10 SDK so app can be built and run outside Docker_
+    - _Preservation: Docker and Docker Compose still installed for PostgreSQL container management_
+    - _Requirements: 2.3, 3.1, 3.4_
+
+  - [x] 3.2 Create `deploy/start-native.sh` deploy/redeploy script
+    - Validate `.env` exists and does not contain `changeme` placeholders
+    - Source `.env` variables into shell session
+    - Pull latest code from MVP branch
+    - Start only PostgreSQL via `docker-compose up -d db` (NOT the app service)
+    - Wait for PostgreSQL health via `pg_isready` polling
+    - Stop existing app via `systemctl stop clinic-scheduler`
+    - Clean up failed Docker build artifacts: stop and remove the `app` container if present, remove locally-built app images (`docker compose down --rmi local` scoped to the app service), and prune dangling images/build cache to reclaim disk space
+    - Publish app natively via `dotnet publish` to `/home/ec2-user/app`
+    - Create systemd service unit `/etc/systemd/system/clinic-scheduler.service` with:
+      - `Type=exec`, `User=ec2-user`, `WorkingDirectory=/home/ec2-user/app`
+      - `ExecStart=/usr/bin/dotnet /home/ec2-user/app/ClinicScheduler.Web.dll`
+      - `Restart=always`, `RestartSec=5`
+      - `After=network.target docker.service`
+      - Environment variables from `.env`: `ASPNETCORE_ENVIRONMENT`, `ASPNETCORE_URLS=http://+:8081`, `ConnectionStrings__DefaultConnection` with `Host=localhost`, `SeedAdmin__Password`
+    - `systemctl daemon-reload`, `enable`, and `start` the service
+    - _Bug_Condition: isBugCondition(deployment) where deployment.usesDockerImages includes sdk:10.0/aspnet:10.0_
+    - _Expected_Behavior: App runs as native dotnet process managed by systemd, not in Docker container_
+    - _Preservation: PostgreSQL stays in Docker with same config; .env format and variable names unchanged_
+    - _Requirements: 2.1, 2.2, 3.1, 3.2, 3.3, 3.4_
+
+  - [x] 3.3 Verify bug condition exploration test now passes
+    - **Property 1: Expected Behavior** - Native Deploy Scripts Bypass Docker App Execution
+    - **IMPORTANT**: Re-run the SAME test from task 1 - do NOT write a new test
+    - The test from task 1 encodes the expected behavior (native deployment via dotnet publish + systemd)
+    - When this test passes, it confirms the deploy scripts correctly bypass Docker for the app
+    - Run bug condition exploration test from step 1
+    - **EXPECTED OUTCOME**: Test PASSES (confirms bug is fixed — app deploys natively)
+    - _Requirements: 2.1, 2.2_
+
+  - [x] 3.4 Verify preservation tests still pass
+    - **Property 2: Preservation** - PostgreSQL Docker Config and Env Var Handling Unchanged
+    - **IMPORTANT**: Re-run the SAME tests from task 2 - do NOT write new tests
+    - Run preservation property tests from step 2
+    - **EXPECTED OUTCOME**: Tests PASS (confirms no regressions — PostgreSQL config, .env handling, port mapping, and Docker fallback script are all unchanged)
+    - Confirm all tests still pass after fix (no regressions)
+
+- [x] 4. Checkpoint - Ensure all tests pass
+  - Run full test suite: `dotnet test ClinicScheduler/ClinicScheduler.Core.Tests/`
+  - Ensure all NativeDeployBugConditionTests pass (bug is fixed)
+  - Ensure all NativeDeployPreservationTests pass (no regressions)
+  - Ensure existing DeploymentBugConditionTests and DeploymentPreservationTests still pass
+  - Ask the user if questions arise

@@ -23,6 +23,9 @@ if (string.IsNullOrWhiteSpace(defaultConnectionString) && !builder.Environment.I
         "The connection string 'DefaultConnection' is missing or empty. Please configure a valid connection string in appsettings.json or environment configuration.");
 }
 
+builder.Services.AddDbContextFactory<ClinicDbContext>(options =>
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+// Also register ClinicDbContext directly (scoped) for controllers and services that need it
 builder.Services.AddDbContext<ClinicDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 

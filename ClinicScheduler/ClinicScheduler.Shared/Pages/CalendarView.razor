@@ -1,4 +1,4 @@
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 
 <div class="calendar-shell">
     <CalendarSidebar ViewerRole="@ViewerRole"
@@ -177,6 +177,8 @@
     private async Task LoadWeekAppointmentsAsync()
     {
         var weekEnd = _weekStart.AddDays(7);
+
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
 
         var query = DbContext.Appointments
             .Include(a => a.Patient)

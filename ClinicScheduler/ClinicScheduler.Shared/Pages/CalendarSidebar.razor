@@ -1,4 +1,4 @@
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject AppointmentSchedulingService SchedulingService
 @inject IRepository<Room> RoomRepo
 @inject IRepository<Therapist> TherapistRepo
@@ -199,11 +199,12 @@
 
     private async Task LoadSidebarDataAsync()
     {
-        await LoadSidebarAppointmentsAsync();
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await LoadSidebarAppointmentsAsync(db);
 
         if (ViewerRole == "staff")
         {
-            _pendingRequests = await DbContext.AppointmentRequests
+            _pendingRequests = await db.AppointmentRequests
                 .Include(r => r.Patient)
                 .Include(r => r.PreferredTherapist)
                 .Where(r => r.Status == AppointmentRequestStatus.Pending)
@@ -212,24 +213,23 @@
         }
     }
 
-    private async Task LoadSidebarAppointmentsAsync()
+    private async Task LoadSidebarAppointmentsAsync(ClinicDbContext db)
     {
         var now = DateTime.UtcNow;
-        var baseQuery = BuildViewerQuery();
 
-        _recentAppointments = await baseQuery
+        _recentAppointments = await BuildViewerQuery(db)
             .Where(a => a.EndTime < now)
             .OrderByDescending(a => a.StartTime)
             .Take(5)
             .ToListAsync();
 
-        _upcomingAppointments = await BuildViewerQuery()
+        _upcomingAppointments = await BuildViewerQuery(db)
             .Where(a => a.StartTime > now)
             .OrderBy(a => a.StartTime)
             .Take(5)
             .ToListAsync();
 
-        _followUpAppointments = await BuildViewerQuery()
+        _followUpAppointments = await BuildViewerQuery(db)
             .Where(a => a.TherapyType != null
                 && a.TherapyType.Name.Contains("follow")
                 && a.StartTime > now)
@@ -238,9 +238,9 @@
             .ToListAsync();
     }
 
-    private IQueryable<Appointment> BuildViewerQuery()
+    private IQueryable<Appointment> BuildViewerQuery(ClinicDbContext db)
     {
-        var query = DbContext.Appointments
+        var query = db.Appointments
             .Include(a => a.Patient)
             .Include(a => a.Therapist)
             .Include(a => a.Room)
@@ -274,9 +274,10 @@
                 request.PreferredDateTime,
                 TimeSpan.FromMinutes(30));
 
-            var tracked = await DbContext.AppointmentRequests.FindAsync(request.Id);
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var tracked = await db.AppointmentRequests.FindAsync(request.Id);
             tracked!.Approve(appt);
-            await DbContext.SaveChangesAsync();
+            await db.SaveChangesAsync();
 
             _pendingRequests.Remove(request);
             Snackbar.Add("Request approved and appointment booked.", Severity.Success);
@@ -290,10 +291,11 @@
 
     private async Task DeclineRequest(AppointmentRequest request)
     {
-        var tracked = await DbContext.AppointmentRequests.FindAsync(request.Id);
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var tracked = await db.AppointmentRequests.FindAsync(request.Id);
         if (tracked is null) return;
         tracked.Deny();
-        await DbContext.SaveChangesAsync();
+        await db.SaveChangesAsync();
 
         _pendingRequests.Remove(request);
         Snackbar.Add("Request declined.", Severity.Info);
