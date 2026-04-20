@@ -159,37 +159,40 @@
     font-weight: 600;
 }
 
-.appt-status-pending {
-    color: #d97706;
-    font-weight: 700;
+
+.appt-cancel-section {
+    margin-top: 6px;
+    padding-top: 10px;
+    border-top: 1px solid #e5e7eb;
 }
 
-.appt-detail-approve {
-    padding: 7px 14px;
+.appt-cancel-btn {
+    width: 100%;
+    padding: 9px 16px;
     border-radius: 8px;
-    border: none;
-    background: #16a34a;
-    color: #fff;
-    font-weight: 700;
-    font-size: 13px;
-    cursor: pointer;
-}
-
-.appt-detail-approve:hover {
-    background: #15803d;
-}
-
-.appt-detail-decline {
-    padding: 7px 14px;
-    border-radius: 8px;
-    border: 1px solid #d1d5db;
-    background: #fff;
+    border: 1px solid #fca5a5;
+    background: #fef2f2;
     color: #dc2626;
     font-weight: 700;
     font-size: 13px;
     cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
 }
 
-.appt-detail-decline:hover {
-    background: #fef2f2;
+.appt-cancel-btn:hover {
+    background: #fee2e2;
+    border-color: #f87171;
+}
+
+.appt-cancel-pending {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #d97706;
+}
+
+.appt-cancel-pending-icon {
+    font-size: 14px;
 }

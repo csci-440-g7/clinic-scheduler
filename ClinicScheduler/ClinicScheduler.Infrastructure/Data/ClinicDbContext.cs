@@ -24,6 +24,7 @@ public class ClinicDbContext : IdentityDbContext<AppUser>
     public DbSet<AppointmentRequest> AppointmentRequests => Set<AppointmentRequest>();
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+    public DbSet<CancelAppointmentRequest> CancelAppointmentRequests => Set<CancelAppointmentRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
