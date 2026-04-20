@@ -148,9 +148,19 @@ public class AppointmentSchedulingServiceTests
         var service = CreateService();
 
         // First FindAsync call (concurrency check) returns 12 existing appointments
-        var existing = Enumerable.Range(1, 12)
-            .Select(_ => new Appointment(MakePatient(), MakeTherapist(), MakeRoom(),
-                NextMonday9am(), TimeSpan.FromMinutes(30)))
+        // Each appointment needs a unique PatientId (and IDs != the ones being requested)
+        // so they don't trigger therapist/room/patient conflict checks before the cap check.
+        var existing = Enumerable.Range(100, 12)
+            .Select(i =>
+            {
+                var p = MakePatient();
+                p.Id = i;
+                var t = MakeTherapist();
+                t.Id = i + 200;
+                var r = MakeRoom();
+                r.Id = i + 300;
+                return new Appointment(p, t, r, NextMonday9am(), TimeSpan.FromMinutes(30));
+            })
             .ToList();
 
         _appointmentRepo
