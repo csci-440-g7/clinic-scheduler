@@ -1,4 +1,6 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
+﻿@inject AuthenticationStateProvider AuthState
+
+<div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
         <a class="navbar-brand" href="">ClinicScheduler</a>
     </div>
@@ -20,10 +22,113 @@
             </NavLink>
         </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="patients">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Patients
-            </NavLink>
-        </div>
+        @if (_isStaffOrAbove)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="patients">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Patients
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="therapists">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Therapists
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="schedule">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Schedule
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="treatment-plans">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Treatment Plans
+                </NavLink>
+            </div>
+        }
+
+        @if (_isAdmin || _isManager)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="rooms">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Rooms
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="therapy-types">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Therapy Types
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="reports">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Reports
+                </NavLink>
+            </div>
+        }
+
+        @if (_isAdmin)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="admin/users">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> User Management
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="staff/onboard">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Staff Onboarding
+                </NavLink>
+            </div>
+        }
+
+        @if (_isAuthenticated)
+        {
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="notifications">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Notifications
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3 mt-3" style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 12px;">
+                <span class="nav-link" style="color: rgba(255,255,255,0.7); font-size: 0.85rem;">
+                    @_userEmail
+                </span>
+            </div>
+
+            <div class="nav-item px-3">
+                <form method="post" action="/account/logout">
+                    <button type="submit" class="nav-link" style="background:none; border:none; cursor:pointer; width:100%; text-align:left; color:rgba(255,255,255,0.7);">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Sign Out
+                    </button>
+                </form>
+            </div>
+        }
     </nav>
 </div>
+
+@code {
+    private bool _isAuthenticated;
+    private bool _isAdmin;
+    private bool _isManager;
+    private bool _isStaffOrAbove;
+    private string? _userEmail;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        _isAuthenticated = user.Identity?.IsAuthenticated ?? false;
+        _isAdmin = user.IsInRole("Admin");
+        _isManager = user.IsInRole("ClinicManager");
+        var isStaff = user.IsInRole("Staff");
+        var isTherapist = user.IsInRole("Therapist");
+
+        _isStaffOrAbove = _isAdmin || _isManager || isStaff || isTherapist;
+        _userEmail = user.Identity?.Name;
+    }
+}
