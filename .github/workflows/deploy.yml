@@ -1,0 +1,43 @@
+name: Build, Test & Deploy
+
+on:
+  push:
+    branches: [MVP]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 10
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+          dotnet-quality: preview
+
+      - name: Restore dependencies
+        run: dotnet restore ClinicScheduler/ClinicScheduler.slnx
+
+      - name: Build
+        run: dotnet build ClinicScheduler/ClinicScheduler.slnx -c Release --no-restore
+
+      - name: Run unit tests
+        run: dotnet test ClinicScheduler/ClinicScheduler.Core.Tests -c Release --no-build --verbosity normal
+
+  deploy:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script_stop: true
+          script: |
+            cd /home/ec2-user/clinic-scheduler
+            git pull origin MVP
+            bash deploy/start-native.sh
