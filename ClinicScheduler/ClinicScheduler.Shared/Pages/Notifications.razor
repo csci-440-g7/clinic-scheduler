@@ -114,24 +114,30 @@ else
 
     private string TypeIcon(NotificationType type) => type switch
     {
-        NotificationType.MissedAppointment    => Icons.Material.Filled.EventBusy,
-        NotificationType.UpcomingAppointment  => Icons.Material.Filled.EventAvailable,
-        NotificationType.RequestApproved      => Icons.Material.Filled.CheckCircle,
-        NotificationType.RequestDenied        => Icons.Material.Filled.Cancel,
-        NotificationType.SchedulingConflict   => Icons.Material.Filled.Warning,
+        NotificationType.MissedAppointment      => Icons.Material.Filled.EventBusy,
+        NotificationType.UpcomingAppointment    => Icons.Material.Filled.EventAvailable,
+        NotificationType.RequestApproved        => Icons.Material.Filled.CheckCircle,
+        NotificationType.RequestDenied          => Icons.Material.Filled.Cancel,
+        NotificationType.SchedulingConflict     => Icons.Material.Filled.Warning,
         NotificationType.AppointmentRescheduled => Icons.Material.Filled.Update,
-        _                                     => Icons.Material.Filled.Notifications
+        NotificationType.CancellationRequested  => Icons.Material.Filled.EventBusy,
+        NotificationType.CancellationApproved   => Icons.Material.Filled.CheckCircle,
+        NotificationType.CancellationDenied     => Icons.Material.Filled.Cancel,
+        _                                       => Icons.Material.Filled.Notifications
     };
 
     private Color TypeColor(NotificationType type) => type switch
     {
-        NotificationType.MissedAppointment    => Color.Warning,
-        NotificationType.UpcomingAppointment  => Color.Info,
-        NotificationType.RequestApproved      => Color.Success,
-        NotificationType.RequestDenied        => Color.Error,
-        NotificationType.SchedulingConflict   => Color.Error,
+        NotificationType.MissedAppointment      => Color.Warning,
+        NotificationType.UpcomingAppointment    => Color.Info,
+        NotificationType.RequestApproved        => Color.Success,
+        NotificationType.RequestDenied          => Color.Error,
+        NotificationType.SchedulingConflict     => Color.Error,
         NotificationType.AppointmentRescheduled => Color.Dark,
-        _                                     => Color.Default
+        NotificationType.CancellationRequested  => Color.Warning,
+        NotificationType.CancellationApproved   => Color.Success,
+        NotificationType.CancellationDenied     => Color.Error,
+        _                                       => Color.Default
     };
 
     private static string TimeAgo(DateTime dt)

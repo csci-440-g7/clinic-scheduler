@@ -1,8 +1,10 @@
+@using Microsoft.AspNetCore.Identity
 @inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject AppointmentSchedulingService SchedulingService
 @inject IRepository<Room> RoomRepo
 @inject IRepository<Therapist> TherapistRepo
 @inject ISnackbar Snackbar
+@inject UserManager<AppUser> UserManager
 
 <div class="calendar-sidebar">
     <div class="mini-month">
@@ -71,6 +73,59 @@
                                         <button type="button" class="sidebar-req-confirm" @onclick="() => ConfirmRequest(r)">Confirm</button>
                                         <button type="button" class="sidebar-req-decline" @onclick="() => DeclineRequest(r)">Decline</button>
                                     </div>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+
+            <section class="sidebar-section">
+                <h4 class="sidebar-heading sidebar-heading-requests">
+                    Pending Cancellations
+                    @if (_pendingCancellations.Count > 0)
+                    {
+                        <span class="sidebar-pending-badge">@_pendingCancellations.Count</span>
+                    }
+                </h4>
+                @if (_pendingCancellations.Count == 0)
+                {
+                    <p class="sidebar-empty">No pending cancellations.</p>
+                }
+                else
+                {
+                    <ul class="sidebar-ul">
+                        @foreach (var cr in _pendingCancellations)
+                        {
+                            <li>
+                                <div class="sidebar-req-card">
+                                    <div class="sidebar-req-meta">
+                                        <span class="sidebar-req-patient">@(cr.Patient?.FullName ?? "Unknown patient")</span>
+                                        <span class="sidebar-req-detail">@cr.Appointment.StartTime.ToString("MMM d") · @cr.Appointment.StartTime.ToString("h:mm tt")</span>
+                                        <span class="sidebar-req-detail">@(cr.Appointment.Therapist?.FullName ?? "Unknown therapist")</span>
+                                        @if (!string.IsNullOrWhiteSpace(cr.Reason))
+                                        {
+                                            <span class="sidebar-req-reason">@cr.Reason</span>
+                                        }
+                                    </div>
+                                    @if (_denyingCancellationId == cr.Id)
+                                    {
+                                        <div class="sidebar-cancel-deny-form">
+                                            <input type="text" class="sidebar-cancel-deny-input" placeholder="Denial reason…"
+                                                   @bind="_denyReason" />
+                                            <div class="sidebar-req-actions">
+                                                <button type="button" class="sidebar-req-decline" @onclick="() => ConfirmDenyCancellation(cr)">Confirm Deny</button>
+                                                <button type="button" class="sidebar-req-decline" @onclick="CancelDeny">Cancel</button>
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="sidebar-req-actions">
+                                            <button type="button" class="sidebar-req-confirm" @onclick="() => ApproveCancellation(cr)">Approve</button>
+                                            <button type="button" class="sidebar-req-decline" @onclick="() => StartDenyCancellation(cr)">Deny</button>
+                                        </div>
+                                    }
                                 </div>
                             </li>
                         }
@@ -169,6 +224,9 @@
     private List<Appointment> _upcomingAppointments = new();
     private List<Appointment> _followUpAppointments = new();
     private List<AppointmentRequest> _pendingRequests = new();
+    private List<CancelAppointmentRequest> _pendingCancellations = new();
+    private int? _denyingCancellationId;
+    private string _denyReason = "";
 
     private readonly string[] _dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -209,6 +267,14 @@
                 .Include(r => r.PreferredTherapist)
                 .Where(r => r.Status == AppointmentRequestStatus.Pending)
                 .OrderBy(r => r.PreferredDateTime)
+                .ToListAsync();
+
+            _pendingCancellations = await db.CancelAppointmentRequests
+                .Include(cr => cr.Patient)
+                .Include(cr => cr.Appointment)
+                    .ThenInclude(a => a.Therapist)
+                .Where(cr => cr.Status == AppointmentRequestStatus.Pending)
+                .OrderBy(cr => cr.CreatedAt)
                 .ToListAsync();
         }
     }
@@ -300,6 +366,102 @@
         _pendingRequests.Remove(request);
         Snackbar.Add("Request declined.", Severity.Info);
         await OnAppointmentStatusChanged.InvokeAsync();
+    }
+
+    private async Task ApproveCancellation(CancelAppointmentRequest cancelRequest)
+    {
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var tracked = await db.CancelAppointmentRequests
+                .Include(cr => cr.Appointment)
+                .Include(cr => cr.Patient)
+                .FirstOrDefaultAsync(cr => cr.Id == cancelRequest.Id);
+
+            if (tracked is null) return;
+
+            tracked.Approve();
+
+            // Look up the patient's AppUser by matching email
+            var patientUser = await db.Users.FirstOrDefaultAsync(u => u.Email == tracked.Patient.Email);
+            if (patientUser is not null)
+            {
+                db.Notifications.Add(new Notification(
+                    patientUser.Id,
+                    NotificationType.CancellationApproved,
+                    "Cancellation Approved",
+                    $"Your cancellation request for the appointment on {tracked.Appointment.StartTime:MMM d, yyyy} at {tracked.Appointment.StartTime:h:mm tt} has been approved.",
+                    tracked.AppointmentId));
+            }
+
+            await db.SaveChangesAsync();
+
+            _pendingCancellations.Remove(cancelRequest);
+            Snackbar.Add("Cancellation approved and appointment canceled.", Severity.Success);
+            await OnAppointmentStatusChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not approve cancellation: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private void StartDenyCancellation(CancelAppointmentRequest cancelRequest)
+    {
+        _denyingCancellationId = cancelRequest.Id;
+        _denyReason = "";
+    }
+
+    private void CancelDeny()
+    {
+        _denyingCancellationId = null;
+        _denyReason = "";
+    }
+
+    private async Task ConfirmDenyCancellation(CancelAppointmentRequest cancelRequest)
+    {
+        if (string.IsNullOrWhiteSpace(_denyReason))
+        {
+            Snackbar.Add("Please provide a denial reason.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var tracked = await db.CancelAppointmentRequests
+                .Include(cr => cr.Patient)
+                .Include(cr => cr.Appointment)
+                .FirstOrDefaultAsync(cr => cr.Id == cancelRequest.Id);
+
+            if (tracked is null) return;
+
+            tracked.Deny(_denyReason.Trim());
+
+            // Look up the patient's AppUser by matching email
+            var patientUser = await db.Users.FirstOrDefaultAsync(u => u.Email == tracked.Patient.Email);
+            if (patientUser is not null)
+            {
+                db.Notifications.Add(new Notification(
+                    patientUser.Id,
+                    NotificationType.CancellationDenied,
+                    "Cancellation Denied",
+                    $"Your cancellation request for the appointment on {tracked.Appointment.StartTime:MMM d, yyyy} at {tracked.Appointment.StartTime:h:mm tt} has been denied. Reason: {_denyReason.Trim()}",
+                    tracked.AppointmentId));
+            }
+
+            await db.SaveChangesAsync();
+
+            _pendingCancellations.Remove(cancelRequest);
+            _denyingCancellationId = null;
+            _denyReason = "";
+            Snackbar.Add("Cancellation request denied.", Severity.Info);
+            await OnAppointmentStatusChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not deny cancellation: {ex.Message}", Severity.Error);
+        }
     }
 
     private string Subtitle(Appointment a) => ViewerRole switch

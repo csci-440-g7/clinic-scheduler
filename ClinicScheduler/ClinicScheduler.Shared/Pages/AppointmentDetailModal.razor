@@ -60,10 +60,36 @@
                 {
                     <p class="appt-detail-staff-hint">Staff scheduling view: patient and doctor are shown. Location, room, and clinical notes are visible to patients and care providers only.</p>
                 }
+
+                @if (ViewerRole == "patient" && Appointment.Status is AppointmentStatus.Scheduled or AppointmentStatus.Rescheduled)
+                {
+                    <div class="appt-cancel-section">
+                        @if (_hasPendingCancelRequest)
+                        {
+                            <span class="appt-cancel-pending">
+                                <span class="appt-cancel-pending-icon">⏳</span>
+                                Cancellation request pending
+                            </span>
+                        }
+                        else
+                        {
+                            <button type="button" class="appt-cancel-btn" @onclick="() => _showCancelForm = true">
+                                Request Cancellation
+                            </button>
+                        }
+                    </div>
+                }
             </div>
         </div>
     </div>
 </div>
+
+@if (_showCancelForm)
+{
+    <CancelRequestModal Appointment="Appointment"
+                        OnClose="() => _showCancelForm = false"
+                        OnRequested="OnCancelRequestedAsync" />
+}
 
 @code {
     [Parameter, EditorRequired] public Appointment Appointment { get; set; } = default!;
@@ -73,11 +99,28 @@
 
     private string _editNotes = "";
     private string? _savedMessage;
+    private bool _showCancelForm;
+    private bool _hasPendingCancelRequest;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         _editNotes = Appointment.Notes ?? "";
         _savedMessage = null;
+        _showCancelForm = false;
+        await CheckPendingCancelRequestAsync();
+    }
+
+    private async Task CheckPendingCancelRequestAsync()
+    {
+        _hasPendingCancelRequest = await DbContext.CancelAppointmentRequests
+            .AnyAsync(r => r.AppointmentId == Appointment.Id && r.Status == AppointmentRequestStatus.Pending);
+    }
+
+    private async Task OnCancelRequestedAsync()
+    {
+        _showCancelForm = false;
+        await CheckPendingCancelRequestAsync();
+        await OnStatusChanged.InvokeAsync();
     }
 
     private async Task SaveNotesAsync()
