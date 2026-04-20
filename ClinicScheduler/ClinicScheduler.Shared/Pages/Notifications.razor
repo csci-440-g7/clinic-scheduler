@@ -1,0 +1,152 @@
+@page "/notifications"
+@attribute [Authorize]
+@inject ClinicDbContext DbContext
+@inject AuthenticationStateProvider AuthStateProvider
+@inject NavigationManager Nav
+
+<PageTitle>Notifications</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5">Notifications</MudText>
+    @if (_notifications.Any(n => !n.IsRead))
+    {
+        <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                   StartIcon="@Icons.Material.Filled.DoneAll"
+                   OnClick="MarkAllReadAsync">
+            Mark All Read
+        </MudButton>
+    }
+</div>
+
+@if (_loading)
+{
+    <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-2" />
+}
+else if (_notifications.Count == 0)
+{
+    <MudPaper Elevation="1" Class="pa-8 text-center">
+        <MudIcon Icon="@Icons.Material.Filled.NotificationsNone" Size="Size.Large" Class="mud-text-secondary mb-3" />
+        <MudText Typo="Typo.h6" Class="mud-text-secondary">No notifications</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary">You're all caught up.</MudText>
+    </MudPaper>
+}
+else
+{
+    <MudPaper Elevation="1">
+        @foreach (var notification in _notifications)
+        {
+            <div style="border-bottom:1px solid #f0f0f0; padding:16px;
+                        background:@(notification.IsRead ? "white" : "#f8fbff");"
+                 class="d-flex align-start gap-3">
+                <MudIcon Icon="@TypeIcon(notification.Type)"
+                         Color="@TypeColor(notification.Type)"
+                         Size="Size.Medium"
+                         Style="margin-top:2px; flex-shrink:0;" />
+                <div style="flex:1;">
+                    <div class="d-flex align-center justify-space-between">
+                        <MudText Typo="Typo.subtitle2"
+                                 Style="@(notification.IsRead ? "" : "font-weight:700;")">
+                            @notification.Title
+                        </MudText>
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">
+                            @TimeAgo(notification.CreatedAt)
+                        </MudText>
+                    </div>
+                    <MudText Typo="Typo.body2">@notification.Message</MudText>
+                    @if (notification.RelatedAppointmentId.HasValue)
+                    {
+                        <MudLink Href="/schedule" Typo="Typo.caption">View Schedule</MudLink>
+                    }
+                </div>
+                @if (!notification.IsRead)
+                {
+                    <div style="width:8px; height:8px; border-radius:50%; background:#1976D2; flex-shrink:0; margin-top:6px;"></div>
+                }
+            </div>
+        }
+    </MudPaper>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _userId;
+    private List<Notification> _notifications = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        _userId = auth.User.FindFirst(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (_userId is null)
+        {
+            _loading = false;
+            return;
+        }
+
+        await LoadAsync();
+
+        // Mark all as read on open
+        var unread = _notifications.Where(n => !n.IsRead).ToList();
+        if (unread.Count > 0)
+        {
+            foreach (var n in unread) n.MarkRead();
+            await DbContext.SaveChangesAsync();
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _notifications = await DbContext.Notifications
+            .Where(n => n.UserId == _userId)
+            .OrderByDescending(n => n.CreatedAt)
+            .ToListAsync();
+        _loading = false;
+    }
+
+    private async Task MarkAllReadAsync()
+    {
+        var unread = _notifications.Where(n => !n.IsRead).ToList();
+        foreach (var n in unread) n.MarkRead();
+        await DbContext.SaveChangesAsync();
+        StateHasChanged();
+    }
+
+    private string TypeIcon(NotificationType type) => type switch
+    {
+        NotificationType.MissedAppointment      => Icons.Material.Filled.EventBusy,
+        NotificationType.UpcomingAppointment    => Icons.Material.Filled.EventAvailable,
+        NotificationType.RequestApproved        => Icons.Material.Filled.CheckCircle,
+        NotificationType.RequestDenied          => Icons.Material.Filled.Cancel,
+        NotificationType.SchedulingConflict     => Icons.Material.Filled.Warning,
+        NotificationType.AppointmentRescheduled => Icons.Material.Filled.Update,
+        NotificationType.CancellationRequested  => Icons.Material.Filled.EventBusy,
+        NotificationType.CancellationApproved   => Icons.Material.Filled.CheckCircle,
+        NotificationType.CancellationDenied     => Icons.Material.Filled.Cancel,
+        _                                       => Icons.Material.Filled.Notifications
+    };
+
+    private Color TypeColor(NotificationType type) => type switch
+    {
+        NotificationType.MissedAppointment      => Color.Warning,
+        NotificationType.UpcomingAppointment    => Color.Info,
+        NotificationType.RequestApproved        => Color.Success,
+        NotificationType.RequestDenied          => Color.Error,
+        NotificationType.SchedulingConflict     => Color.Error,
+        NotificationType.AppointmentRescheduled => Color.Dark,
+        NotificationType.CancellationRequested  => Color.Warning,
+        NotificationType.CancellationApproved   => Color.Success,
+        NotificationType.CancellationDenied     => Color.Error,
+        _                                       => Color.Default
+    };
+
+    private static string TimeAgo(DateTime dt)
+    {
+        var diff = DateTime.UtcNow - dt;
+        if (diff.TotalMinutes < 1)  return "just now";
+        if (diff.TotalHours < 1)    return $"{(int)diff.TotalMinutes}m ago";
+        if (diff.TotalDays < 1)     return $"{(int)diff.TotalHours}h ago";
+        if (diff.TotalDays < 7)     return $"{(int)diff.TotalDays}d ago";
+        return dt.ToLocalTime().ToString("MMM d, yyyy");
+    }
+}

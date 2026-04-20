@@ -1,0 +1,165 @@
+@using Microsoft.AspNetCore.Identity
+@inject ClinicDbContext DbContext
+@inject AuthenticationStateProvider AuthState
+@inject ISnackbar Snackbar
+@inject UserManager<AppUser> UserManager
+
+<div class="crm-backdrop"
+     @onclick="OnClose"
+     role="dialog"
+     aria-modal="true"
+     aria-labelledby="crm-title">
+    <div class="crm-panel" @onclick:stopPropagation="true">
+        <div class="crm-header">
+            <h3 id="crm-title" class="crm-title">Request Cancellation</h3>
+            <button type="button" class="crm-close" @onclick="OnClose" title="Close">×</button>
+        </div>
+
+        @if (!string.IsNullOrWhiteSpace(_error))
+        {
+            <p class="crm-error">@_error</p>
+        }
+
+        <div class="crm-fields">
+            <div class="crm-context">
+                <div class="crm-context-row">
+                    <span class="crm-context-label">Date</span>
+                    <span class="crm-context-value">@Appointment.StartTime.ToString("MMM d, yyyy")</span>
+                </div>
+                <div class="crm-context-row">
+                    <span class="crm-context-label">Time</span>
+                    <span class="crm-context-value">@Appointment.StartTime.ToString("h:mm tt") – @Appointment.EndTime.ToString("h:mm tt")</span>
+                </div>
+                <div class="crm-context-row">
+                    <span class="crm-context-label">Therapist</span>
+                    <span class="crm-context-value">@(Appointment.Therapist?.FullName ?? "Unknown")</span>
+                </div>
+            </div>
+
+            <label class="crm-label">
+                Reason for cancellation <span class="crm-req">*</span>
+                <textarea class="crm-input crm-textarea"
+                          @bind="_reason"
+                          placeholder="Please explain why you need to cancel this appointment"
+                          rows="3"></textarea>
+            </label>
+        </div>
+
+        <div class="crm-actions">
+            <button type="button" class="crm-btn-cancel" @onclick="OnClose">Cancel</button>
+            <button type="button" class="crm-btn-submit" @onclick="SubmitAsync">Submit Request</button>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public Appointment Appointment { get; set; } = default!;
+    [Parameter] public EventCallback OnClose { get; set; }
+    [Parameter] public EventCallback OnRequested { get; set; }
+
+    private string _reason = "";
+    private string _error = "";
+
+    private async Task SubmitAsync()
+    {
+        _error = "";
+
+        if (string.IsNullOrWhiteSpace(_reason))
+        {
+            _error = "Please provide a reason for cancellation.";
+            return;
+        }
+
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        var user = authState.User;
+
+        if (user.Identity is null || !user.Identity.IsAuthenticated)
+        {
+            _error = "You must be logged in to submit a request.";
+            return;
+        }
+
+        var email = user.Identity.Name;
+        var patient = await DbContext.Patients.FirstOrDefaultAsync(p => p.Email == email);
+
+        if (patient is null)
+        {
+            _error = "Patient record not found. Please contact the clinic.";
+            return;
+        }
+
+        // Check for existing pending cancel request to prevent duplicates
+        var hasPending = await DbContext.CancelAppointmentRequests
+            .AnyAsync(r => r.AppointmentId == Appointment.Id && r.Status == AppointmentRequestStatus.Pending);
+
+        if (hasPending)
+        {
+            _error = "A cancellation request is already pending for this appointment.";
+            return;
+        }
+
+        try
+        {
+            var cancelRequest = new CancelAppointmentRequest(patient, Appointment, _reason.Trim());
+            DbContext.CancelAppointmentRequests.Add(cancelRequest);
+
+            // Create CancellationRequested notifications for all staff users
+            var staffRoles = new[] { "Staff", "Admin", "ClinicManager" };
+            var staffUserIds = new List<string>();
+            foreach (var role in staffRoles)
+            {
+                var usersInRole = await UserManager.GetUsersInRoleAsync(role);
+                staffUserIds.AddRange(usersInRole.Select(u => u.Id));
+            }
+
+            // Deduplicate in case a user has multiple staff roles
+            var distinctStaffUserIds = staffUserIds.Distinct();
+
+            var notificationTitle = "Cancellation Request";
+            var notificationMessage = $"{patient.FullName} has requested to cancel their appointment on {Appointment.StartTime:MMM d, yyyy} at {Appointment.StartTime:h:mm tt}.";
+
+            foreach (var staffUserId in distinctStaffUserIds)
+            {
+                DbContext.Notifications.Add(new Notification(
+                    staffUserId,
+                    NotificationType.CancellationRequested,
+                    notificationTitle,
+                    notificationMessage,
+                    Appointment.Id));
+            }
+
+            await DbContext.SaveChangesAsync();
+
+            Snackbar.Add("Cancellation request submitted", Severity.Success);
+            await OnRequested.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error submitting request: {ex.Message}", Severity.Error);
+        }
+    }
+}
+
+<style>
+    .crm-backdrop { position: fixed; inset: 0; z-index: 1100; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; background: rgba(15,23,42,0.45); backdrop-filter: blur(2px); }
+    .crm-panel { width: 100%; max-width: 460px; max-height: 90vh; overflow: auto; border-radius: 14px; background: #fff; padding: 16px 18px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
+    .crm-header { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
+    .crm-title { margin: 0; font-size: 15px; font-weight: 800; color: #111827; }
+    .crm-close { width: 32px; height: 32px; border-radius: 8px; border: 1px solid #e5e7eb; background: #fff; cursor: pointer; font-size: 20px; line-height: 1; color: #6b7280; display: flex; align-items: center; justify-content: center; }
+    .crm-close:hover { background: #f3f4f6; color: #111827; }
+    .crm-error { color: #dc2626; font-size: 13px; margin: 0 0 10px; }
+    .crm-fields { display: flex; flex-direction: column; gap: 12px; }
+    .crm-context { display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; }
+    .crm-context-row { display: flex; justify-content: space-between; align-items: center; font-size: 13px; }
+    .crm-context-label { font-weight: 600; color: #374151; }
+    .crm-context-value { color: #6b7280; }
+    .crm-label { display: flex; flex-direction: column; gap: 4px; font-size: 14px; font-weight: 600; color: #374151; }
+    .crm-req { color: #dc2626; }
+    .crm-input { width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box; font: inherit; background: #fff; }
+    .crm-textarea { resize: vertical; min-height: 72px; }
+    .crm-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
+    .crm-btn-cancel { padding: 8px 16px; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; cursor: pointer; font: inherit; color: #374151; }
+    .crm-btn-cancel:hover { background: #f9fafb; }
+    .crm-btn-submit { padding: 8px 16px; background: #2563eb; color: #fff; border: none; border-radius: 8px; cursor: pointer; font: inherit; font-weight: 600; }
+    .crm-btn-submit:hover { background: #1d4ed8; }
+</style>

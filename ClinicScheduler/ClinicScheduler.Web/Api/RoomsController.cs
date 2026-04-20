@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicScheduler.Web.Api;
 
+/// <summary>Manages treatment room resources.</summary>
 [ApiController]
 [Route("api/[controller]")]
 public class RoomsController : ControllerBase
@@ -12,12 +13,14 @@ public class RoomsController : ControllerBase
     private readonly IRepository<Room> _roomRepository;
     private readonly IRepository<Location> _locationRepository;
 
+    /// <summary>Initializes a new instance of <see cref="RoomsController"/>.</summary>
     public RoomsController(IRepository<Room> roomRepository, IRepository<Location> locationRepository)
     {
         _roomRepository = roomRepository;
         _locationRepository = locationRepository;
     }
 
+    /// <summary>Returns all rooms across all locations.</summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<RoomDto>>> GetAll(CancellationToken ct)
     {
@@ -28,6 +31,7 @@ public class RoomsController : ControllerBase
         return Ok(rooms.Select(room => MapToDto(room, locationNames)).ToList());
     }
 
+    /// <summary>Returns a single room by ID.</summary>
     [HttpGet("{id:int}")]
     public async Task<ActionResult<RoomDto>> GetById(int id, CancellationToken ct)
     {
@@ -38,6 +42,7 @@ public class RoomsController : ControllerBase
         return Ok(MapToDto(room, location?.Name));
     }
 
+    /// <summary>Returns all rooms within a specific location.</summary>
     [HttpGet("location/{locationId:int}")]
     public async Task<ActionResult<IReadOnlyList<RoomDto>>> GetByLocation(int locationId, CancellationToken ct)
     {
@@ -51,6 +56,7 @@ public class RoomsController : ControllerBase
         return Ok(rooms.Select(room => MapToDto(room, location.Name)).ToList());
     }
 
+    /// <summary>Creates a new room within the specified location.</summary>
     [HttpPost]
     public async Task<ActionResult<RoomDto>> Create(CreateRoomRequest request, CancellationToken ct)
     {
@@ -64,6 +70,7 @@ public class RoomsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created, location.Name));
     }
 
+    /// <summary>Updates a room's name, capacity, and description.</summary>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, UpdateRoomRequest request, CancellationToken ct)
     {
@@ -76,6 +83,7 @@ public class RoomsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Deletes a room.</summary>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {

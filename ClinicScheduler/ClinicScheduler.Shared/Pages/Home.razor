@@ -1,0 +1,634 @@
+@page "/"
+@attribute [Authorize]
+@inject IRepository<Patient> PatientRepo
+@inject IRepository<Therapist> TherapistRepo
+@inject IRepository<Room> RoomRepo
+@inject ClinicDbContext DbContext
+@inject AuthenticationStateProvider AuthStateProvider
+@inject AppointmentSchedulingService SchedulingService
+@inject ISnackbar Snackbar
+
+<PageTitle>Dashboard</PageTitle>
+
+<!-- ═══════════════════════════════════════════════════════════
+     STAFF / ADMIN DASHBOARD
+     ═══════════════════════════════════════════════════════════ -->
+<AuthorizeView Roles="Admin,ClinicManager,Staff,Therapist" Context="auth">
+    <Authorized>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+        }
+
+        <MudText Typo="Typo.h5" Class="mb-4">Dashboard</MudText>
+
+        <!-- Stat cards -->
+        <MudGrid>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="2" Class="pa-4 rounded-lg">
+                    <div class="d-flex align-center gap-3">
+                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Color="Color.Info" Size="Size.Large" />
+                        <div>
+                            <MudText Typo="Typo.h4">@_todayCount</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Appointments Today</MudText>
+                        </div>
+                    </div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="2" Class="pa-4 rounded-lg">
+                    <div class="d-flex align-center gap-3">
+                        <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Color="Color.Success" Size="Size.Large" />
+                        <div>
+                            <MudText Typo="Typo.h4">@_scheduledCount</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Scheduled</MudText>
+                        </div>
+                    </div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="2" Class="pa-4 rounded-lg">
+                    <div class="d-flex align-center gap-3">
+                        <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Large" />
+                        <div>
+                            <MudText Typo="Typo.h4">@_patientCount</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Active Patients</MudText>
+                        </div>
+                    </div>
+                </MudPaper>
+            </MudItem>
+            <MudItem xs="12" sm="6" md="3">
+                <MudPaper Elevation="2" Class="pa-4 rounded-lg">
+                    <div class="d-flex align-center gap-3">
+                        <MudIcon Icon="@Icons.Material.Filled.Notifications"
+                                 Color="@(_pendingRequests.Count > 0 ? Color.Warning : Color.Default)"
+                                 Size="Size.Large" />
+                        <div>
+                            <MudText Typo="Typo.h4">@_pendingRequests.Count</MudText>
+                            <MudText Typo="Typo.body2" Class="mud-text-secondary">Pending Requests</MudText>
+                        </div>
+                    </div>
+                </MudPaper>
+            </MudItem>
+        </MudGrid>
+
+        <!-- Pending appointment requests -->
+        @if (_pendingRequests.Count > 0)
+        {
+            <div class="d-flex align-center justify-space-between mt-6 mb-3">
+                <MudText Typo="Typo.h6">
+                    <MudIcon Icon="@Icons.Material.Filled.NotificationImportant" Color="Color.Warning" Class="me-1" />
+                    Appointment Requests
+                    <MudChip T="string" Size="Size.Small" Color="Color.Warning" Class="ml-2">@_pendingRequests.Count pending</MudChip>
+                </MudText>
+            </div>
+            <MudPaper Elevation="2" Class="mb-6">
+                <MudTable Items="_pendingRequests" Hover="true" Dense="true">
+                    <HeaderContent>
+                        <MudTh>Patient</MudTh>
+                        <MudTh>Preferred Therapist</MudTh>
+                        <MudTh>Preferred Date/Time</MudTh>
+                        <MudTh>Reason</MudTh>
+                        <MudTh>Submitted</MudTh>
+                        <MudTh>Actions</MudTh>
+                    </HeaderContent>
+                    <RowTemplate Context="req">
+                        <MudTd>@req.Patient?.FullName</MudTd>
+                        <MudTd>@(req.PreferredTherapist?.FullName ?? "No preference")</MudTd>
+                        <MudTd>@(req.PreferredDateTime == req.CreatedAt ? "—" : req.PreferredDateTime.ToLocalTime().ToString("MMM d, h:mm tt"))</MudTd>
+                        <MudTd>@(string.IsNullOrWhiteSpace(req.Notes) ? "—" : req.Notes)</MudTd>
+                        <MudTd>@req.CreatedAt.ToLocalTime().ToString("MMM d, h:mm tt")</MudTd>
+                        <MudTd>
+                            <MudButton Size="Size.Small" Variant="Variant.Filled" Color="Color.Success"
+                                       StartIcon="@Icons.Material.Filled.Check"
+                                       OnClick="@(() => OpenApproveDialog(req))">
+                                Approve
+                            </MudButton>
+                            <MudButton Size="Size.Small" Variant="Variant.Outlined" Color="Color.Error"
+                                       StartIcon="@Icons.Material.Filled.Close" Class="ml-2"
+                                       OnClick="@(() => DenyRequestAsync(req))">
+                                Deny
+                            </MudButton>
+                        </MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+        }
+
+        <!-- Recent appointments -->
+        <MudText Typo="Typo.h6" Class="mt-4 mb-3">Recent Appointments</MudText>
+        <MudPaper Elevation="1">
+            <MudTable Items="_recent" Hover="true" Dense="true" Loading="_loading">
+                <HeaderContent>
+                    <MudTh>Patient</MudTh>
+                    <MudTh>Therapist</MudTh>
+                    <MudTh>Start Time</MudTh>
+                    <MudTh>Status</MudTh>
+                </HeaderContent>
+                <RowTemplate Context="appt">
+                    <MudTd>@appt.Patient?.FullName</MudTd>
+                    <MudTd>@appt.Therapist?.FullName</MudTd>
+                    <MudTd>@appt.StartTime.ToString("MMM d, yyyy h:mm tt")</MudTd>
+                    <MudTd>
+                        <MudChip T="string" Size="Size.Small" Color="@StatusColor(appt.Status)">
+                            @appt.Status
+                        </MudChip>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Class="pa-4">No appointments yet.</MudText>
+                </NoRecordsContent>
+            </MudTable>
+        </MudPaper>
+
+        <MudText Typo="Typo.h6" Class="mt-6 mb-3">Quick Actions</MudText>
+        <div class="d-flex gap-3 flex-wrap">
+            <MudButton Href="schedule" Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.CalendarMonth">
+                View Schedule
+            </MudButton>
+            <MudButton Href="patients" Variant="Variant.Outlined" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.People">
+                Manage Patients
+            </MudButton>
+            <MudButton Href="treatment-plans" Variant="Variant.Outlined" Color="Color.Secondary"
+                       StartIcon="@Icons.Material.Filled.Assignment">
+                Treatment Plans
+            </MudButton>
+        </div>
+
+        <!-- Approve request dialog -->
+        <MudDialog @bind-Visible="_approveDialogOpen" Options="_dialogOptions">
+            <TitleContent>
+                <MudText Typo="Typo.h6">Approve Request — @_approveTarget?.Patient?.FullName</MudText>
+            </TitleContent>
+            <DialogContent>
+                @if (_approveError is not null)
+                {
+                    <MudAlert Severity="Severity.Error" Class="mb-3">@_approveError</MudAlert>
+                }
+                @if (_approveTarget?.PreferredTherapist is not null)
+                {
+                    <MudText Typo="Typo.body2" Class="mb-1 mud-text-secondary">
+                        Preferred therapist: <b>@_approveTarget.PreferredTherapist.FullName</b>
+                    </MudText>
+                }
+                @if (!string.IsNullOrWhiteSpace(_approveTarget?.Notes))
+                {
+                    <MudText Typo="Typo.body2" Class="mb-3 mud-text-secondary">
+                        Reason: @_approveTarget.Notes
+                    </MudText>
+                }
+                <MudSelect T="int" @bind-Value="_approveTherapistId" Label="Assign Therapist"
+                           Variant="Variant.Outlined" Class="mb-3" Required="true">
+                    @foreach (var t in _allTherapists)
+                    {
+                        <MudSelectItem T="int" Value="@t.Id">@t.FullName</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudSelect T="int" @bind-Value="_approveRoomId" Label="Assign Room"
+                           Variant="Variant.Outlined" Class="mb-3" Required="true">
+                    @foreach (var r in _allRooms)
+                    {
+                        <MudSelectItem T="int" Value="@r.Id">@r.Name</MudSelectItem>
+                    }
+                </MudSelect>
+            </DialogContent>
+            <DialogActions>
+                <MudButton OnClick="@(() => _approveDialogOpen = false)">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="ConfirmApproveAsync">
+                    Confirm &amp; Book
+                </MudButton>
+            </DialogActions>
+        </MudDialog>
+    </Authorized>
+</AuthorizeView>
+
+<!-- ═══════════════════════════════════════════════════════════
+     PATIENT DASHBOARD
+     ═══════════════════════════════════════════════════════════ -->
+<AuthorizeView Roles="Patient" Context="auth">
+    <Authorized>
+        @if (_loading)
+        {
+            <MudProgressLinear Indeterminate="true" Color="Color.Primary" Class="mb-4" />
+        }
+
+        <div class="d-flex align-center justify-space-between mb-1">
+            <div>
+                <MudText Typo="Typo.h5">Welcome back@(_patientName is not null ? $", {_patientName}" : "")!</MudText>
+                <MudText Typo="Typo.body2" Class="mud-text-secondary">
+                    @DateTime.Now.ToString("dddd, MMMM d yyyy")
+                </MudText>
+            </div>
+            <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                       StartIcon="@Icons.Material.Filled.AddCircle"
+                       OnClick="@(() => _requestDialogOpen = true)">
+                Request Appointment
+            </MudButton>
+        </div>
+
+        <!-- Upcoming appointments -->
+        <MudText Typo="Typo.h6" Class="mt-5 mb-3">Upcoming Appointments</MudText>
+        <MudPaper Elevation="1" Class="mb-6">
+            <MudTable Items="_patientUpcoming" Hover="true" Dense="true" Loading="_loading">
+                <HeaderContent>
+                    <MudTh>Date &amp; Time</MudTh>
+                    <MudTh>Therapist</MudTh>
+                    <MudTh>Room</MudTh>
+                    <MudTh>Status</MudTh>
+                </HeaderContent>
+                <RowTemplate Context="appt">
+                    <MudTd>@appt.StartTime.ToLocalTime().ToString("ddd, MMM d h:mm tt")</MudTd>
+                    <MudTd>@appt.Therapist?.FullName</MudTd>
+                    <MudTd>@appt.Room?.Name</MudTd>
+                    <MudTd>
+                        <MudChip T="string" Size="Size.Small" Color="@StatusColor(appt.Status)">
+                            @appt.Status
+                        </MudChip>
+                    </MudTd>
+                </RowTemplate>
+                <NoRecordsContent>
+                    <MudText Class="pa-4">No upcoming appointments.</MudText>
+                </NoRecordsContent>
+            </MudTable>
+        </MudPaper>
+
+        <!-- My requests -->
+        @if (_myRequests.Count > 0)
+        {
+            <MudText Typo="Typo.h6" Class="mb-3">My Requests</MudText>
+            <MudPaper Elevation="1" Class="mb-6">
+                <MudTable Items="_myRequests" Hover="true" Dense="true">
+                    <HeaderContent>
+                        <MudTh>Preferred Date &amp; Time</MudTh>
+                        <MudTh>Notes</MudTh>
+                        <MudTh>Status</MudTh>
+                        <MudTh>Submitted</MudTh>
+                    </HeaderContent>
+                    <RowTemplate Context="req">
+                        <MudTd>@(req.PreferredDateTime == req.CreatedAt ? "—" : req.PreferredDateTime.ToLocalTime().ToString("ddd, MMM d h:mm tt"))</MudTd>
+                        <MudTd>@(string.IsNullOrWhiteSpace(req.Notes) ? "—" : req.Notes)</MudTd>
+                        <MudTd>
+                            <MudChip T="string" Size="Size.Small" Color="@RequestStatusColor(req.Status)">
+                                @req.Status
+                            </MudChip>
+                            @if (req.Status == AppointmentRequestStatus.Denied && !string.IsNullOrWhiteSpace(req.DenialReason))
+                            {
+                                <MudText Typo="Typo.caption" Color="Color.Error" Class="d-block mt-1">
+                                    @req.DenialReason
+                                </MudText>
+                            }
+                        </MudTd>
+                        <MudTd>@req.CreatedAt.ToLocalTime().ToString("MMM d, h:mm tt")</MudTd>
+                    </RowTemplate>
+                </MudTable>
+            </MudPaper>
+        }
+
+        <!-- Treatment plan -->
+        @if (_patientPlan is not null)
+        {
+            <MudText Typo="Typo.h6" Class="mb-3">My Treatment Plan</MudText>
+            <MudPaper Elevation="1" Class="pa-4">
+                <MudGrid>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Therapist</MudText>
+                        <MudText Typo="Typo.body1">@_patientPlan.Therapist?.FullName</MudText>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Frequency</MudText>
+                        <MudText Typo="Typo.body1">@_patientPlan.FrequencyPerWeek x / week</MudText>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Duration</MudText>
+                        <MudText Typo="Typo.body1">@_patientPlan.TotalDays days</MudText>
+                    </MudItem>
+                    <MudItem xs="12" sm="6" md="3">
+                        <MudText Typo="Typo.caption" Class="mud-text-secondary">Start → End</MudText>
+                        <MudText Typo="Typo.body1">
+                            @_patientPlan.StartDate.ToString("MMM d") → @_patientPlan.EndDate.ToString("MMM d, yyyy")
+                        </MudText>
+                    </MudItem>
+                    @if (_patientPlan.TreatmentPlanTherapies.Any())
+                    {
+                        <MudItem xs="12">
+                            <MudText Typo="Typo.caption" Class="mud-text-secondary">Therapies</MudText>
+                            <div class="d-flex gap-2 flex-wrap mt-1">
+                                @foreach (var tpt in _patientPlan.TreatmentPlanTherapies)
+                                {
+                                    var color = tpt.TherapyType?.ColorCode;
+                                    <MudChip T="string" Size="Size.Small"
+                                             Style="@(!string.IsNullOrEmpty(color) ? $"background:{color};color:#fff;" : "")">
+                                        @tpt.TherapyType?.Name
+                                    </MudChip>
+                                }
+                            </div>
+                        </MudItem>
+                    }
+                </MudGrid>
+            </MudPaper>
+        }
+
+        <!-- Request appointment dialog -->
+        <MudDialog @bind-Visible="_requestDialogOpen" Options="_dialogOptions">
+            <TitleContent>
+                <MudText Typo="Typo.h6">Request an Appointment</MudText>
+            </TitleContent>
+            <DialogContent>
+                <MudSelect T="int?" @bind-Value="_reqTherapistId" Label="Who would you like to see?"
+                           Variant="Variant.Outlined" Class="mb-3" Clearable="true"
+                           Placeholder="No preference">
+                    @foreach (var t in _allTherapists)
+                    {
+                        <MudSelectItem T="int?" Value="@((int?)t.Id)">
+                            @t.FullName @(!string.IsNullOrEmpty(t.Specialty) ? $"— {t.Specialty}" : "")
+                        </MudSelectItem>
+                    }
+                </MudSelect>
+                <MudDatePicker @bind-Date="_reqDate" Label="Preferred Date (optional)"
+                               Variant="Variant.Outlined" Class="mb-3"
+                               Editable="true" DateFormat="MM/dd/yyyy"
+                               MinDate="@DateTime.Today" Clearable="true" />
+                <MudSelect T="int?" @bind-Value="_reqTimeMinutes" Label="Preferred Time (optional)"
+                           Variant="Variant.Outlined" Class="mb-3" Clearable="true">
+                    @foreach (var (value, label) in _timeOptions)
+                    {
+                        <MudSelectItem T="int?" Value="@((int?)value)">@label</MudSelectItem>
+                    }
+                </MudSelect>
+                <MudTextField @bind-Value="_reqNotes" Label="Why do you need this appointment?"
+                              Variant="Variant.Outlined" Lines="4" Required="true"
+                              Placeholder="Describe your concern, symptoms, or reason for the visit…" />
+            </DialogContent>
+            <DialogActions>
+                <MudButton OnClick="@(() => _requestDialogOpen = false)">Cancel</MudButton>
+                <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                           Disabled="@string.IsNullOrWhiteSpace(_reqNotes)"
+                           OnClick="SubmitRequestAsync">
+                    Send Request
+                </MudButton>
+            </DialogActions>
+        </MudDialog>
+    </Authorized>
+</AuthorizeView>
+
+@code {
+    private bool _loading = true;
+
+    // Shared lookup data
+    private List<Therapist> _allTherapists = [];
+    private List<Room> _allRooms = [];
+
+    // Staff/Admin state
+    private int _todayCount;
+    private int _scheduledCount;
+    private int _patientCount;
+    private List<Appointment> _recent = [];
+    private List<AppointmentRequest> _pendingRequests = [];
+    private bool _approveDialogOpen;
+    private AppointmentRequest? _approveTarget;
+    private int _approveTherapistId;
+    private int _approveRoomId;
+    private string? _approveError;
+
+    // Patient state
+    private int _currentPatientId;
+    private string? _patientName;
+    private List<Appointment> _patientUpcoming = [];
+    private List<AppointmentRequest> _myRequests = [];
+    private TreatmentPlan? _patientPlan;
+    private bool _requestDialogOpen;
+    private int? _reqTherapistId;
+    private DateTime? _reqDate;
+    private int? _reqTimeMinutes;
+    private string? _reqNotes;
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    private static readonly (int Value, string Label)[] _timeOptions =
+        Enumerable.Range(8, 9).SelectMany(h => new[]
+        {
+            (h * 60,      $"{(h > 12 ? h - 12 : h)}:00 {(h >= 12 ? "PM" : "AM")}"),
+            (h * 60 + 30, $"{(h > 12 ? h - 12 : h)}:30 {(h >= 12 ? "PM" : "AM")}")
+        }).ToArray();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var auth = await AuthStateProvider.GetAuthenticationStateAsync();
+        var user = auth.User;
+
+        if (user.IsInRole("Admin") || user.IsInRole("ClinicManager") || user.IsInRole("Staff") || user.IsInRole("Therapist"))
+        {
+            _allTherapists = (await TherapistRepo.GetAllAsync()).ToList();
+            _allRooms = (await RoomRepo.GetAllAsync()).ToList();
+            if (_allTherapists.Count > 0) _approveTherapistId = _allTherapists[0].Id;
+            if (_allRooms.Count > 0) _approveRoomId = _allRooms[0].Id;
+            await LoadClinicDashboardAsync();
+        }
+        else if (user.IsInRole("Patient"))
+        {
+            _allTherapists = (await TherapistRepo.GetAllAsync()).ToList();
+            await LoadPatientDashboardAsync(user.Identity?.Name ?? "");
+        }
+
+        _loading = false;
+    }
+
+    private async Task LoadClinicDashboardAsync()
+    {
+        var today = DateTime.UtcNow.Date;
+        var tomorrow = today.AddDays(1);
+
+        _todayCount = await DbContext.Appointments
+            .CountAsync(a => a.StartTime >= today && a.StartTime < tomorrow);
+        _scheduledCount = await DbContext.Appointments
+            .CountAsync(a => a.Status == AppointmentStatus.Scheduled);
+        _patientCount = (await PatientRepo.GetAllAsync()).Count;
+
+        _recent = await DbContext.Appointments
+            .Include(a => a.Patient)
+            .Include(a => a.Therapist)
+            .OrderByDescending(a => a.StartTime)
+            .Take(5)
+            .ToListAsync();
+
+        _pendingRequests = await DbContext.AppointmentRequests
+            .Include(r => r.Patient)
+            .Include(r => r.PreferredTherapist)
+            .Where(r => r.Status == AppointmentRequestStatus.Pending)
+            .OrderBy(r => r.CreatedAt)
+            .ToListAsync();
+    }
+
+    private async Task LoadPatientDashboardAsync(string email)
+    {
+        var patient = await DbContext.Patients.FirstOrDefaultAsync(p => p.Email == email);
+        if (patient is null) return;
+
+        _currentPatientId = patient.Id;
+        _patientName = patient.FirstName;
+
+        _patientUpcoming = await DbContext.Appointments
+            .Include(a => a.Therapist)
+            .Include(a => a.Room)
+            .Where(a => a.PatientId == patient.Id && a.StartTime >= DateTime.UtcNow)
+            .OrderBy(a => a.StartTime)
+            .Take(10)
+            .ToListAsync();
+
+        _myRequests = await DbContext.AppointmentRequests
+            .Include(r => r.PreferredTherapist)
+            .Where(r => r.PatientId == patient.Id)
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(10)
+            .ToListAsync();
+
+        _patientPlan = await DbContext.TreatmentPlans
+            .Include(p => p.Therapist)
+            .Include(p => p.TreatmentPlanTherapies)
+                .ThenInclude(tpt => tpt.TherapyType)
+            .Where(p => p.PatientId == patient.Id)
+            .OrderByDescending(p => p.CreatedAt)
+            .FirstOrDefaultAsync();
+    }
+
+    private async Task SubmitRequestAsync()
+    {
+        var patient = await DbContext.Patients.FindAsync(_currentPatientId);
+        if (patient is null) return;
+
+        Therapist? preferredTherapist = _reqTherapistId.HasValue
+            ? await TherapistRepo.GetByIdAsync(_reqTherapistId.Value)
+            : null;
+
+        // Compute preferred datetime if patient specified one
+        DateTime preferredDt = DateTime.UtcNow;
+        if (_reqDate.HasValue)
+        {
+            var minutes = _reqTimeMinutes ?? 9 * 60;
+            preferredDt = _reqDate.Value.Date.AddMinutes(minutes).ToUniversalTime();
+        }
+
+        var request = new AppointmentRequest(patient, _reqNotes, preferredTherapist);
+        // Store preferred date/time on the entity
+        if (_reqDate.HasValue)
+            request.SetPreferredDateTime(preferredDt);
+
+        DbContext.AppointmentRequests.Add(request);
+        await DbContext.SaveChangesAsync();
+
+        _requestDialogOpen = false;
+        _reqNotes = null;
+        _reqTherapistId = null;
+        _reqDate = null;
+        _reqTimeMinutes = null;
+
+        _myRequests = await DbContext.AppointmentRequests
+            .Include(r => r.PreferredTherapist)
+            .Where(r => r.PatientId == _currentPatientId)
+            .OrderByDescending(r => r.CreatedAt)
+            .Take(10)
+            .ToListAsync();
+
+        Snackbar.Add("Request sent! Staff will review it shortly.", Severity.Success);
+    }
+
+    private void OpenApproveDialog(AppointmentRequest req)
+    {
+        _approveTarget = req;
+        _approveError = null;
+        // Pre-select the patient's preferred therapist if they chose one
+        _approveTherapistId = req.PreferredTherapistId ?? (_allTherapists.Count > 0 ? _allTherapists[0].Id : 0);
+        if (_allRooms.Count > 0) _approveRoomId = _allRooms[0].Id;
+        _approveDialogOpen = true;
+    }
+
+    private async Task ConfirmApproveAsync()
+    {
+        _approveError = null;
+        if (_approveTarget is null) return;
+
+        try
+        {
+            var appt = await SchedulingService.CreateAppointmentAsync(
+                _approveTarget.PatientId,
+                _approveTherapistId,
+                _approveRoomId,
+                _approveTarget.PreferredDateTime,
+                TimeSpan.FromMinutes(30));
+
+            var tracked = await DbContext.AppointmentRequests.FindAsync(_approveTarget.Id);
+            tracked!.Approve(appt);
+            await DbContext.SaveChangesAsync();
+
+            await NotifyPatientAsync(_approveTarget.PatientId, NotificationType.RequestApproved,
+                "Appointment Confirmed",
+                $"Your appointment request has been approved and booked for {_approveTarget.PreferredDateTime.ToLocalTime():ddd, MMM d 'at' h:mm tt}.",
+                appt.Id);
+
+            _approveDialogOpen = false;
+            Snackbar.Add("Request approved and appointment booked.", Severity.Success);
+            await LoadClinicDashboardAsync();
+        }
+        catch (InvalidOperationException ex) when (ex.Message.Contains("conflict", StringComparison.OrdinalIgnoreCase)
+                                                 || ex.Message.Contains("overlap", StringComparison.OrdinalIgnoreCase)
+                                                 || ex.Message.Contains("already", StringComparison.OrdinalIgnoreCase))
+        {
+            // Slot is taken — surface to staff and auto-deny with a patient-visible reason
+            _approveError = ex.Message;
+
+            var tracked = await DbContext.AppointmentRequests.FindAsync(_approveTarget.Id);
+            tracked!.Deny("The requested time slot is already booked. Please submit a new request with a different time.");
+            await DbContext.SaveChangesAsync();
+
+            await LoadClinicDashboardAsync();
+            Snackbar.Add("Conflict detected — patient has been notified that the slot is taken.", Severity.Warning);
+        }
+        catch (Exception ex)
+        {
+            _approveError = ex.Message;
+        }
+    }
+
+    private async Task DenyRequestAsync(AppointmentRequest req, string? reason = null)
+    {
+        var tracked = await DbContext.AppointmentRequests.FindAsync(req.Id);
+        if (tracked is null) return;
+        tracked.Deny(reason);
+        await DbContext.SaveChangesAsync();
+        await NotifyPatientAsync(req.PatientId, NotificationType.RequestDenied,
+            "Appointment Request Denied",
+            reason ?? "Your appointment request has been denied.");
+        Snackbar.Add("Request denied.", Severity.Info);
+        await LoadClinicDashboardAsync();
+    }
+
+    private async Task NotifyPatientAsync(int patientId, NotificationType type, string title, string message, int? appointmentId = null)
+    {
+        var patient = await DbContext.Patients.FindAsync(patientId);
+        if (patient is null) return;
+        var user = await DbContext.Users.FirstOrDefaultAsync(u => u.UserName == patient.Email);
+        if (user is null) return;
+        DbContext.Notifications.Add(new Notification(user.Id, type, title, message, appointmentId));
+        await DbContext.SaveChangesAsync();
+    }
+
+    private Color StatusColor(AppointmentStatus status) => status switch
+    {
+        AppointmentStatus.Scheduled   => Color.Info,
+        AppointmentStatus.Completed   => Color.Success,
+        AppointmentStatus.Canceled    => Color.Error,
+        AppointmentStatus.Missed      => Color.Warning,
+        AppointmentStatus.Rescheduled => Color.Dark,
+        _                             => Color.Default
+    };
+
+    private Color RequestStatusColor(AppointmentRequestStatus status) => status switch
+    {
+        AppointmentRequestStatus.Pending  => Color.Warning,
+        AppointmentRequestStatus.Approved => Color.Success,
+        AppointmentRequestStatus.Denied   => Color.Error,
+        _                                 => Color.Default
+    };
+}

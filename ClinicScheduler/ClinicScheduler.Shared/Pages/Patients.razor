@@ -1,6 +1,7 @@
 @page "/patients"
-@inject ClinicScheduler.Shared.Services.ClinicDataStore Data
-@using ClinicScheduler.Shared.Services
+@attribute [Authorize(Roles = "Admin,ClinicManager,Staff,Therapist")]
+@inject ClinicDbContext DbContext
+@inject ISnackbar Snackbar
 
 <div class="patients-shell">
     <div class="patients-header">
@@ -25,8 +26,9 @@
                 {
                     <li class="list-item">
                         <button type="button" class="list-item-btn" @onclick="() => OpenDetail(p)">
-                            <div class="list-title">@p.Name</div>
-                            <div class="list-sub">@p.Phone · @p.Email</div>
+                            <div class="list-title">@p.FullName</div>
+                            <div class="list-sub">@p.Phone</div>
+                            <div class="list-sub">@p.Email</div>
                             <div class="list-hint">View details</div>
                         </button>
                     </li>
@@ -47,27 +49,23 @@
             <div class="modal-fields">
                 <div class="modal-field">
                     <span class="modal-k">Name</span>
-                    <span class="modal-v">@_detail.Name</span>
+                    <span class="modal-v">@_detail.FullName</span>
                 </div>
                 <div class="modal-field">
                     <span class="modal-k">Date of birth</span>
-                    <span class="modal-v">@_detail.Dob.ToString("MMM d, yyyy")</span>
+                    <span class="modal-v">@_detail.DateOfBirth.ToString("MMM d, yyyy")</span>
                 </div>
                 <div class="modal-field">
                     <span class="modal-k">Phone</span>
-                    <span class="modal-v">@_detail.Phone</span>
+                    <span class="modal-v">@(_detail.Phone ?? "—")</span>
                 </div>
                 <div class="modal-field">
                     <span class="modal-k">Email</span>
                     <span class="modal-v">@_detail.Email</span>
                 </div>
                 <div class="modal-field modal-field-block">
-                    <span class="modal-k">Allergies</span>
-                    <span class="modal-v">@(string.IsNullOrWhiteSpace(_detail.Allergies) ? "—" : _detail.Allergies)</span>
-                </div>
-                <div class="modal-field modal-field-block">
-                    <span class="modal-k">Medications</span>
-                    <span class="modal-v">@(string.IsNullOrWhiteSpace(_detail.Medications) ? "—" : _detail.Medications)</span>
+                    <span class="modal-k">Notes</span>
+                    <span class="modal-v">@(string.IsNullOrWhiteSpace(_detail.Notes) ? "—" : _detail.Notes)</span>
                 </div>
             </div>
         </div>
@@ -90,28 +88,24 @@
 
             <div class="form-fields">
                 <label class="form-label">
-                    Full name <span class="required">*</span>
-                    <input class="field-input" @bind="_fname" placeholder="e.g. Jane Smith" />
+                    First name <span class="required">*</span>
+                    <input class="field-input" @bind="_fFirstName" placeholder="e.g. Jane" />
+                </label>
+                <label class="form-label">
+                    Last name <span class="required">*</span>
+                    <input class="field-input" @bind="_fLastName" placeholder="e.g. Smith" />
                 </label>
                 <label class="form-label">
                     Date of birth <span class="required">*</span>
                     <input class="field-input" type="date" @bind="_fdob" />
                 </label>
                 <label class="form-label">
-                    Phone
-                    <input class="field-input" @bind="_fphone" placeholder="e.g. 555-1234" />
-                </label>
-                <label class="form-label">
-                    Email
+                    Email <span class="required">*</span>
                     <input class="field-input" type="email" @bind="_femail" placeholder="e.g. patient@example.com" />
                 </label>
                 <label class="form-label">
-                    Allergies
-                    <input class="field-input" @bind="_fallergies" placeholder="e.g. Penicillin (rash)" />
-                </label>
-                <label class="form-label">
-                    Medications
-                    <textarea class="field-input field-textarea" @bind="_fmeds" rows="2" placeholder="e.g. Ibuprofen 400 mg PRN"></textarea>
+                    Phone
+                    <input class="field-input" @bind="_fphone" placeholder="e.g. 555-1234" />
                 </label>
             </div>
 
@@ -125,77 +119,92 @@
 
 @code {
     private string _search = "";
-    private List<MockClinicData.Patient> _filtered = new();
-    private IEnumerable<IGrouping<char, MockClinicData.Patient>> _grouped =>
-        _filtered.GroupBy(p => char.ToUpperInvariant(p.Name[0])).OrderBy(g => g.Key);
+    private List<Patient> _filtered = new();
+    private IEnumerable<IGrouping<char, Patient>> _grouped =>
+        _filtered.GroupBy(p => char.ToUpperInvariant(p.FullName[0])).OrderBy(g => g.Key);
 
-    private MockClinicData.Patient? _detail;
+    private Patient? _detail;
 
     private bool _showAddForm;
-    private string _fname = "";
+    private string _fFirstName = "";
+    private string _fLastName = "";
     private DateTime _fdob = DateTime.Today.AddYears(-30);
     private string _fphone = "";
     private string _femail = "";
-    private string _fallergies = "";
-    private string _fmeds = "";
     private string _formError = "";
 
-    protected override void OnInitialized() => RefreshList();
+    protected override async Task OnInitializedAsync() => await RefreshListAsync();
 
-    private void OnSearchChanged(string? term)
+    private async Task OnSearchChanged(string? term)
     {
         _search = term ?? "";
-        RefreshList();
+        await RefreshListAsync();
     }
 
-    private void RefreshList()
+    private async Task RefreshListAsync()
     {
-        var t = _search.Trim().ToLowerInvariant();
+        var t = _search.Trim();
         _filtered = string.IsNullOrWhiteSpace(t)
-            ? Data.Patients.ToList()
-            : Data.Patients.Where(p => p.Name.ToLowerInvariant().Contains(t)).ToList();
+            ? await DbContext.Patients.ToListAsync()
+            : await DbContext.Patients
+                .Where(p => p.FirstName.Contains(t) || p.LastName.Contains(t))
+                .ToListAsync();
     }
 
-    private void OpenDetail(MockClinicData.Patient p) => _detail = Data.GetPatient(p.Id) ?? p;
+    private void OpenDetail(Patient p) => _detail = p;
     private void CloseDetail() => _detail = null;
 
     private void OpenAddForm()
     {
-        _fname = "";
+        _fFirstName = "";
+        _fLastName = "";
         _fdob = DateTime.Today.AddYears(-30);
         _fphone = "";
         _femail = "";
-        _fallergies = "";
-        _fmeds = "";
         _formError = "";
         _showAddForm = true;
     }
 
     private void CloseAddForm() => _showAddForm = false;
 
-    private void SubmitAddPatient()
+    private async Task SubmitAddPatient()
     {
         _formError = "";
-        var name = _fname.Trim();
-        if (string.IsNullOrWhiteSpace(name))
+        var firstName = _fFirstName.Trim();
+        var lastName = _fLastName.Trim();
+        var email = _femail.Trim();
+
+        if (string.IsNullOrWhiteSpace(firstName) || string.IsNullOrWhiteSpace(lastName))
         {
-            _formError = "Full name is required.";
+            _formError = "First name and last name are required.";
             return;
         }
 
-        var id = $"p-{Guid.NewGuid():N}"[..10];
-        var patient = new MockClinicData.Patient(
-            id,
-            name,
-            _fdob,
-            _fphone.Trim(),
-            _femail.Trim(),
-            _fallergies.Trim(),
-            _fmeds.Trim());
+        if (string.IsNullOrWhiteSpace(email))
+        {
+            _formError = "Email is required.";
+            return;
+        }
 
-        Data.AddPatient(patient);
-        RefreshList();
-        _showAddForm = false;
+        try
+        {
+            var patient = new Patient(
+                firstName,
+                lastName,
+                email,
+                DateOnly.FromDateTime(_fdob),
+                string.IsNullOrWhiteSpace(_fphone) ? null : _fphone.Trim());
+
+            DbContext.Patients.Add(patient);
+            await DbContext.SaveChangesAsync();
+            Snackbar.Add("Patient added.", Severity.Success);
+            await RefreshListAsync();
+            _showAddForm = false;
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error adding patient: {ex.Message}", Severity.Error);
+        }
     }
 }
 
@@ -211,11 +220,11 @@
     .muted { color: #6b7280; }
     .list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
     .list-item { border: 1px solid #e5e7eb; border-radius: 10px; background: #fafafa; overflow: hidden; }
-    .list-item-btn { width: 100%; text-align: left; border: none; background: transparent; cursor: pointer; font: inherit; padding: 12px; color: inherit; }
+    .list-item-btn { width: 100%; text-align: left; border: none; background: transparent; cursor: pointer; font: inherit; padding: 14px 16px; color: inherit; }
     .list-item-btn:hover { background: #eff6ff; }
-    .list-title { font-weight: 700; }
-    .list-sub { color: #6b7280; font-size: 13px; margin-top: 2px; }
-    .list-hint { margin-top: 6px; font-size: 12px; font-weight: 600; color: #2563eb; }
+    .list-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; line-height: 1.4; }
+    .list-sub { color: #6b7280; font-size: 13px; margin-top: 4px; line-height: 1.4; }
+    .list-hint { margin-top: 8px; font-size: 12px; font-weight: 600; color: #2563eb; line-height: 1.4; }
     .modal-root { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; background: rgba(15,23,42,0.45); backdrop-filter: blur(2px); }
     .modal-panel { width: 100%; max-width: 460px; max-height: 90vh; overflow: auto; border-radius: 14px; background: #fff; padding: 16px 18px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
     .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }

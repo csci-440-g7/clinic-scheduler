@@ -1,0 +1,397 @@
+@page "/patients/onboard"
+@attribute [Authorize(Roles = "Admin,Staff")]
+@using Microsoft.AspNetCore.Identity
+@inject IRepository<Patient> PatientRepo
+@inject IRepository<Therapist> TherapistRepo
+@inject IRepository<TherapyType> TherapyTypeRepo
+@inject ClinicDbContext DbContext
+@inject UserManager<AppUser> UserManager
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Onboard Patient</PageTitle>
+
+<div class="d-flex align-center mb-4 gap-2">
+    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("/patients"))" />
+    <MudText Typo="Typo.h5">Onboard New Patient</MudText>
+</div>
+
+<!-- Step indicator -->
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <div class="d-flex align-center">
+        @for (int i = 0; i < _stepTitles.Length; i++)
+        {
+            var idx = i;
+            var isActive = idx == _step;
+            var isDone = idx < _step;
+            <div class="d-flex align-center gap-2">
+                <MudAvatar Size="Size.Small"
+                           Color="@(isDone ? Color.Success : isActive ? Color.Primary : Color.Default)">
+                    @if (isDone)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                    }
+                    else
+                    {
+                        @(idx + 1)
+                    }
+                </MudAvatar>
+                <MudText Typo="Typo.body2"
+                         Color="@(isActive ? Color.Primary : Color.Default)">
+                    @_stepTitles[idx]
+                </MudText>
+            </div>
+            @if (idx < _stepTitles.Length - 1)
+            {
+                <MudDivider Class="flex-grow-1 mx-3" />
+            }
+        }
+    </div>
+</MudPaper>
+
+@if (_errorMessage is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-3" ShowCloseIcon="true"
+              CloseIconClicked="@(() => _errorMessage = null)">
+        @_errorMessage
+    </MudAlert>
+}
+
+<!-- Step 0: Patient Info -->
+@if (_step == 0)
+{
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-4">Patient Information</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_firstName" Label="First Name" Required="true"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_lastName" Label="Last Name" Required="true"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_email" Label="Email" Required="true"
+                              Variant="Variant.Outlined" InputType="InputType.Email" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_phone" Label="Phone (optional)"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudDatePicker @bind-Date="_dob" Label="Date of Birth" Required="true"
+                               Variant="Variant.Outlined" Editable="true" DateFormat="MM/dd/yyyy" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_password" Label="Initial Password" Required="true"
+                              Variant="Variant.Outlined" InputType="InputType.Password"
+                              HelperText="Min 10 chars with uppercase, digit, and special character (e.g. Patient@2026!). Share with patient after registration." />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_passwordConfirm" Label="Confirm Password" Required="true"
+                              Variant="Variant.Outlined" InputType="InputType.Password" />
+            </MudItem>
+        </MudGrid>
+        <div class="d-flex justify-end mt-4">
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="GoToStep1"
+                       EndIcon="@Icons.Material.Filled.ArrowForward">
+                Next
+            </MudButton>
+        </div>
+    </MudPaper>
+}
+
+<!-- Step 1: Treatment Plan -->
+@if (_step == 1)
+{
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-1">Treatment Plan</MudText>
+        <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+            Set up an initial treatment plan, or skip to register the patient without one.
+        </MudText>
+
+        @if (_therapists.Count == 0)
+        {
+            <MudAlert Severity="Severity.Warning" Class="mb-4">
+                No therapists found. Add therapists first, or skip to register the patient only.
+            </MudAlert>
+        }
+        else
+        {
+            <MudGrid>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="int" @bind-Value="_therapistId" Label="Therapist" Required="true"
+                               Variant="Variant.Outlined">
+                        @foreach (var t in _therapists)
+                        {
+                            <MudSelectItem T="int" Value="@t.Id">@t.FullName</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="int" @bind-Value="_frequency" Label="Frequency (days/week)"
+                               Variant="Variant.Outlined">
+                        <MudSelectItem T="int" Value="2">2 days/week</MudSelectItem>
+                        <MudSelectItem T="int" Value="3">3 days/week</MudSelectItem>
+                        <MudSelectItem T="int" Value="4">4 days/week</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudSelect T="int" @bind-Value="_totalDays" Label="Total Days"
+                               Variant="Variant.Outlined">
+                        <MudSelectItem T="int" Value="20">20 days</MudSelectItem>
+                        <MudSelectItem T="int" Value="30">30 days</MudSelectItem>
+                        <MudSelectItem T="int" Value="50">50 days</MudSelectItem>
+                    </MudSelect>
+                </MudItem>
+                <MudItem xs="12" sm="6">
+                    <MudDatePicker @bind-Date="_planStartDate" Label="Start Date" Required="true"
+                                   Variant="Variant.Outlined" Editable="true" DateFormat="MM/dd/yyyy" />
+                </MudItem>
+                <MudItem xs="12">
+                    <MudSelect T="int" @bind-SelectedValues="_therapyTypeIds"
+                               Label="Therapy Types" MultiSelection="true"
+                               Variant="Variant.Outlined">
+                        @foreach (var tt in _therapyTypes)
+                        {
+                            <MudSelectItem T="int" Value="@tt.Id">@tt.Name</MudSelectItem>
+                        }
+                    </MudSelect>
+                </MudItem>
+            </MudGrid>
+        }
+
+        <div class="d-flex justify-space-between mt-4">
+            <div class="d-flex gap-2">
+                <MudButton Variant="Variant.Text" OnClick="@(() => _step = 0)"
+                           StartIcon="@Icons.Material.Filled.ArrowBack">
+                    Back
+                </MudButton>
+                <MudButton Variant="Variant.Text" OnClick="SkipPlan">
+                    Skip Treatment Plan
+                </MudButton>
+            </div>
+            @if (_therapists.Count > 0)
+            {
+                <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="GoToStep2"
+                           EndIcon="@Icons.Material.Filled.ArrowForward">
+                    Next
+                </MudButton>
+            }
+        </div>
+    </MudPaper>
+}
+
+<!-- Step 2: Confirm -->
+@if (_step == 2)
+{
+    var therapistName = _therapists.FirstOrDefault(t => t.Id == _therapistId)?.FullName ?? "—";
+    var therapyNames = _therapyTypes.Where(tt => _therapyTypeIds.Contains(tt.Id)).Select(tt => tt.Name).ToList();
+
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-4">Confirm & Finish</MudText>
+
+        <MudText Typo="Typo.subtitle2" Class="mb-2">Patient</MudText>
+        <MudSimpleTable Dense="true" Class="mb-4" Elevation="0">
+            <tbody>
+                <tr><td><b>Name</b></td><td>@_firstName @_lastName</td></tr>
+                <tr><td><b>Email</b></td><td>@_email</td></tr>
+                @if (!string.IsNullOrWhiteSpace(_phone))
+                {
+                    <tr><td><b>Phone</b></td><td>@_phone</td></tr>
+                }
+                <tr><td><b>Date of Birth</b></td><td>@_dob?.ToString("MMM d, yyyy")</td></tr>
+            </tbody>
+        </MudSimpleTable>
+
+        @if (_includePlan)
+        {
+            <MudText Typo="Typo.subtitle2" Class="mb-2">Treatment Plan</MudText>
+            <MudSimpleTable Dense="true" Class="mb-4" Elevation="0">
+                <tbody>
+                    <tr><td><b>Therapist</b></td><td>@therapistName</td></tr>
+                    <tr><td><b>Frequency</b></td><td>@_frequency days/week</td></tr>
+                    <tr><td><b>Total Days</b></td><td>@_totalDays</td></tr>
+                    <tr><td><b>Start Date</b></td><td>@_planStartDate?.ToString("MMM d, yyyy")</td></tr>
+                    <tr>
+                        <td><b>Therapy Types</b></td>
+                        <td>
+                            @if (therapyNames.Count > 0)
+                            {
+                                @string.Join(", ", therapyNames)
+                            }
+                            else
+                            {
+                                <span class="mud-text-secondary">None selected</span>
+                            }
+                        </td>
+                    </tr>
+                </tbody>
+            </MudSimpleTable>
+        }
+        else
+        {
+            <MudAlert Severity="Severity.Info" Class="mb-4">
+                No treatment plan — patient will be registered without one.
+            </MudAlert>
+        }
+
+        <div class="d-flex justify-space-between mt-2">
+            <MudButton Variant="Variant.Text" OnClick="@(() => _step = 1)"
+                       StartIcon="@Icons.Material.Filled.ArrowBack">
+                Back
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="FinishAsync"
+                       Disabled="_saving" EndIcon="@Icons.Material.Filled.Check">
+                @(_saving ? "Saving…" : "Confirm & Finish")
+            </MudButton>
+        </div>
+    </MudPaper>
+}
+
+@code {
+    private static readonly string[] _stepTitles = ["Patient Info", "Treatment Plan", "Confirm"];
+
+    private int _step;
+    private bool _includePlan = true;
+    private bool _saving;
+    private string? _errorMessage;
+
+    // Step 0 — patient
+    private string _firstName = "";
+    private string _lastName = "";
+    private string _email = "";
+    private string? _phone;
+    private DateTime? _dob;
+    private string _password = "";
+    private string _passwordConfirm = "";
+
+    // Step 1 — plan
+    private List<Therapist> _therapists = [];
+    private List<TherapyType> _therapyTypes = [];
+    private int _therapistId;
+    private int _frequency = 3;
+    private int _totalDays = 30;
+    private DateTime? _planStartDate;
+    private IEnumerable<int> _therapyTypeIds = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _therapists = (await TherapistRepo.GetAllAsync()).ToList();
+        _therapyTypes = (await TherapyTypeRepo.GetAllAsync()).ToList();
+        if (_therapists.Count > 0) _therapistId = _therapists[0].Id;
+        _planStartDate = DateTime.Today;
+    }
+
+    private void GoToStep1()
+    {
+        _errorMessage = null;
+        if (string.IsNullOrWhiteSpace(_firstName) || string.IsNullOrWhiteSpace(_lastName))
+        {
+            _errorMessage = "First and last name are required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_email))
+        {
+            _errorMessage = "Email is required.";
+            return;
+        }
+        if (_dob is null)
+        {
+            _errorMessage = "Date of birth is required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_password) || _password.Length < 10)
+        {
+            _errorMessage = "Password must be at least 10 characters.";
+            return;
+        }
+        if (!_password.Any(char.IsUpper) || !_password.Any(char.IsDigit) ||
+            !_password.Any(c => !char.IsLetterOrDigit(c)))
+        {
+            _errorMessage = "Password must include at least one uppercase letter, one digit, and one special character.";
+            return;
+        }
+        if (_password != _passwordConfirm)
+        {
+            _errorMessage = "Passwords do not match.";
+            return;
+        }
+        _includePlan = true;
+        _step = 1;
+    }
+
+    private void SkipPlan()
+    {
+        _includePlan = false;
+        _step = 2;
+    }
+
+    private void GoToStep2()
+    {
+        _errorMessage = null;
+        if (_therapistId == 0)
+        {
+            _errorMessage = "Please select a therapist.";
+            return;
+        }
+        if (_planStartDate is null)
+        {
+            _errorMessage = "Start date is required.";
+            return;
+        }
+        _includePlan = true;
+        _step = 2;
+    }
+
+    private async Task FinishAsync()
+    {
+        _errorMessage = null;
+        _saving = true;
+        try
+        {
+            var dob = DateOnly.FromDateTime(_dob!.Value.Date);
+            var patient = new Patient(_firstName, _lastName, _email, dob, _phone);
+            await PatientRepo.AddAsync(patient);
+
+            if (_includePlan)
+            {
+                var therapist = await TherapistRepo.GetByIdAsync(_therapistId)
+                    ?? throw new InvalidOperationException("Therapist not found.");
+                var startDate = DateOnly.FromDateTime(_planStartDate!.Value.Date);
+                var plan = new TreatmentPlan(patient, therapist, _frequency, _totalDays, startDate);
+                foreach (var id in _therapyTypeIds)
+                {
+                    var tt = _therapyTypes.First(t => t.Id == id);
+                    plan.AddTherapy(tt);
+                }
+                DbContext.TreatmentPlans.Add(plan);
+                await DbContext.SaveChangesAsync();
+            }
+
+            var appUser = new AppUser
+            {
+                UserName = _email,
+                Email = _email,
+                DisplayName = $"{_firstName} {_lastName}"
+            };
+            var identityResult = await UserManager.CreateAsync(appUser, _password);
+            if (!identityResult.Succeeded)
+            {
+                _errorMessage = string.Join("; ", identityResult.Errors.Select(e => e.Description));
+                _saving = false;
+                return;
+            }
+            await UserManager.AddToRoleAsync(appUser, "Patient");
+
+            Snackbar.Add($"{_firstName} {_lastName} onboarded successfully.", Severity.Success);
+            Nav.NavigateTo("/patients");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+            _saving = false;
+        }
+    }
+}

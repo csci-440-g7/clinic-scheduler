@@ -32,11 +32,11 @@ public sealed class UpdateTreatmentPlanRequest
     public int FrequencyPerWeek { get; init; }
     
     /// <summary>
-    /// Total number of days the treatment plan spans.
+    /// Total number of days the treatment plan spans (allowed values: 20, 30, or 50).
     /// </summary>
     /// <example>30</example>
     [Required]
-    [Range(1, 365)]
+    [AllowedValues(20, 30, 50, ErrorMessage = "TotalDays must be 20, 30, or 50.")]
     public int TotalDays { get; init; }
     
     /// <summary>

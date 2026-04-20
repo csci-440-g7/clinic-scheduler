@@ -1,0 +1,192 @@
+@page "/therapists"
+@attribute [Authorize(Roles = "Admin,ClinicManager,Staff")]
+@inject IRepository<Therapist> TherapistRepo
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Therapists</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5">Therapists</MudText>
+    <div class="d-flex gap-2">
+        <MudButton Variant="Variant.Outlined" Color="Color.Secondary"
+                   StartIcon="@Icons.Material.Filled.Badge"
+                   OnClick="@(() => Nav.NavigateTo("/staff/onboard"))">
+            Onboard Staff
+        </MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary"
+                   StartIcon="@Icons.Material.Filled.PersonAdd"
+                   OnClick="OpenCreateDialog">
+            Add Therapist
+        </MudButton>
+    </div>
+</div>
+
+<MudDataGrid T="Therapist" Items="_therapists" Loading="_loading"
+             SortMode="SortMode.Single" Hover="true" Elevation="1">
+    <Columns>
+        <TemplateColumn Title="Name">
+            <CellTemplate>
+                <div class="d-flex align-center gap-2">
+                    <MudAvatar Size="Size.Small" Color="Color.Secondary">
+                        @($"{(context.Item.FirstName.Length > 0 ? context.Item.FirstName[0] : '?')}{(context.Item.LastName.Length > 0 ? context.Item.LastName[0] : '?')}")
+                    </MudAvatar>
+                    @context.Item.FullName
+                </div>
+            </CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="t => t.Email" Title="Email" />
+        <PropertyColumn Property="t => t.Phone" Title="Phone" />
+        <TemplateColumn Title="Specialty">
+            <CellTemplate>
+                @if (!string.IsNullOrEmpty(context.Item.Specialty))
+                {
+                    <MudChip T="string" Size="Size.Small" Color="Color.Info">@context.Item.Specialty</MudChip>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Actions" Sortable="false">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="@(() => OpenEditDialog(context.Item))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="@(() => DeleteAsync(context.Item))" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        <MudText Class="pa-4">No therapists found. Add one to get started.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+<MudDialog @bind-Visible="_dialogOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_isEdit ? "Edit Therapist" : "New Therapist")</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_errorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">@_errorMessage</MudAlert>
+        }
+        <MudGrid>
+            <MudItem xs="6">
+                <MudTextField @bind-Value="_formFirstName" Label="First Name" Required="true"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="6">
+                <MudTextField @bind-Value="_formLastName" Label="Last Name" Required="true"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+        </MudGrid>
+        <MudTextField @bind-Value="_formEmail" Label="Email" Required="true"
+                      Variant="Variant.Outlined" Class="mt-3" />
+        <MudTextField @bind-Value="_formPhone" Label="Phone"
+                      Variant="Variant.Outlined" Class="mt-3" />
+        <MudSelect T="string" @bind-Value="_formSpecialty" Label="Specialty"
+                   Variant="Variant.Outlined" Class="mt-3">
+            <MudSelectItem T="string" Value="@("")">None</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Chiropractic")">Chiropractic</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Physical Therapy")">Physical Therapy</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Massage Therapy")">Massage Therapy</MudSelectItem>
+            <MudSelectItem T="string" Value="@("Pain Management")">Pain Management</MudSelectItem>
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _dialogOpen = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">
+            @(_isEdit ? "Save" : "Create")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<Therapist> _therapists = [];
+    private bool _loading = true;
+    private bool _dialogOpen;
+    private bool _isEdit;
+    private Therapist? _editTarget;
+    private string _formFirstName = "";
+    private string _formLastName = "";
+    private string _formEmail = "";
+    private string? _formPhone;
+    private string? _formSpecialty;
+    private string? _errorMessage;
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _therapists = (await TherapistRepo.GetAllAsync()).ToList();
+        _loading = false;
+    }
+
+    private void OpenCreateDialog()
+    {
+        _isEdit = false;
+        _editTarget = null;
+        _formFirstName = "";
+        _formLastName = "";
+        _formEmail = "";
+        _formPhone = null;
+        _formSpecialty = null;
+        _errorMessage = null;
+        _dialogOpen = true;
+    }
+
+    private void OpenEditDialog(Therapist t)
+    {
+        _isEdit = true;
+        _editTarget = t;
+        _formFirstName = t.FirstName;
+        _formLastName = t.LastName;
+        _formEmail = t.Email;
+        _formPhone = t.Phone;
+        _formSpecialty = t.Specialty;
+        _errorMessage = null;
+        _dialogOpen = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _errorMessage = null;
+        try
+        {
+            if (_isEdit && _editTarget is not null)
+            {
+                _editTarget.UpdateDetails(_formFirstName, _formLastName, _formSpecialty);
+                _editTarget.UpdateContactInfo(_formEmail, _formPhone);
+                await TherapistRepo.UpdateAsync(_editTarget);
+            }
+            else
+            {
+                var t = new Therapist(_formFirstName, _formLastName, _formEmail, _formPhone, _formSpecialty);
+                await TherapistRepo.AddAsync(t);
+            }
+            _dialogOpen = false;
+            Snackbar.Add(_isEdit ? "Therapist updated." : "Therapist created.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task DeleteAsync(Therapist t)
+    {
+        try
+        {
+            await TherapistRepo.DeleteAsync(t);
+            Snackbar.Add("Therapist deleted.", Severity.Info);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

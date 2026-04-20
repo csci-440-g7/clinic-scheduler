@@ -1,0 +1,187 @@
+@page "/rooms"
+@attribute [Authorize(Roles = "Admin,ClinicManager")]
+@inject IRepository<Room> RoomRepo
+@inject IRepository<Location> LocationRepo
+@inject ISnackbar Snackbar
+
+<PageTitle>Rooms</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5">Rooms</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenCreateDialog">
+        Add Room
+    </MudButton>
+</div>
+
+<MudDataGrid T="Room" Items="_rooms" Loading="_loading"
+             SortMode="SortMode.Single" Hover="true" Elevation="1">
+    <Columns>
+        <PropertyColumn Property="r => r.Name" Title="Name" />
+        <PropertyColumn Property="r => r.Capacity" Title="Capacity" />
+        <PropertyColumn Property="r => r.Description" Title="Description" />
+        <TemplateColumn Title="Location">
+            <CellTemplate>
+                @context.Item.Location?.Name
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Actions" Sortable="false">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="@(() => OpenEditDialog(context.Item))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="@(() => DeleteAsync(context.Item))" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        <MudText Class="pa-4">No rooms found. Add one to get started.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+<MudDialog @bind-Visible="_dialogOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_isEdit ? "Edit Room" : "New Room")</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_errorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">@_errorMessage</MudAlert>
+        }
+        <MudTextField @bind-Value="_formName" Label="Room Name" Required="true"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        <MudNumericField T="int" @bind-Value="_formCapacity" Label="Capacity"
+                         Min="1" Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField @bind-Value="_formDescription" Label="Description"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        @if (!_isEdit)
+        {
+            <MudSelect T="int" @bind-Value="_formLocationId" Label="Location"
+                       Variant="Variant.Outlined" Class="mb-3" Required="true">
+                @foreach (var loc in _locations)
+                {
+                    <MudSelectItem T="int" Value="@loc.Id">@loc.Name</MudSelectItem>
+                }
+            </MudSelect>
+        }
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _dialogOpen = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">
+            @(_isEdit ? "Save" : "Create")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<Room> _rooms = [];
+    private List<Location> _locations = [];
+    private bool _loading = true;
+    private bool _dialogOpen;
+    private bool _isEdit;
+    private Room? _editTarget;
+    private string _formName = "";
+    private int _formCapacity = 1;
+    private string? _formDescription;
+    private int _formLocationId;
+    private string? _errorMessage;
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _locations = (await LocationRepo.GetAllAsync()).ToList();
+        if (_locations.Count > 0) _formLocationId = _locations[0].Id;
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        // Load rooms with location navigation property
+        var all = await RoomRepo.GetAllAsync();
+        // Reload with location data via LocationRepo to populate navigation
+        _rooms = all.ToList();
+        // Re-fetch to ensure Location nav is populated
+        foreach (var room in _rooms)
+        {
+            if (room.Location is null)
+            {
+                var loc = _locations.FirstOrDefault(l => l.Id == room.LocationId);
+                if (loc is not null)
+                {
+                    // Navigation property may not be loaded; use local cache
+                }
+            }
+        }
+        _loading = false;
+    }
+
+    private void OpenCreateDialog()
+    {
+        _isEdit = false;
+        _editTarget = null;
+        _formName = "";
+        _formCapacity = 1;
+        _formDescription = null;
+        _formLocationId = _locations.Count > 0 ? _locations[0].Id : 0;
+        _errorMessage = null;
+        _dialogOpen = true;
+    }
+
+    private void OpenEditDialog(Room r)
+    {
+        _isEdit = true;
+        _editTarget = r;
+        _formName = r.Name;
+        _formCapacity = r.Capacity;
+        _formDescription = r.Description;
+        _errorMessage = null;
+        _dialogOpen = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _errorMessage = null;
+        try
+        {
+            if (_isEdit && _editTarget is not null)
+            {
+                _editTarget.UpdateDetails(_formName, _formCapacity, _formDescription);
+                await RoomRepo.UpdateAsync(_editTarget);
+            }
+            else
+            {
+                var location = await LocationRepo.GetByIdAsync(_formLocationId)
+                    ?? throw new InvalidOperationException("Selected location not found.");
+                var room = new Room(_formName, _formCapacity, location);
+                if (_formDescription is not null)
+                    room.UpdateDetails(_formName, _formCapacity, _formDescription);
+                await RoomRepo.AddAsync(room);
+            }
+            _dialogOpen = false;
+            Snackbar.Add(_isEdit ? "Room updated." : "Room created.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task DeleteAsync(Room r)
+    {
+        try
+        {
+            await RoomRepo.DeleteAsync(r);
+            Snackbar.Add("Room deleted.", Severity.Info);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

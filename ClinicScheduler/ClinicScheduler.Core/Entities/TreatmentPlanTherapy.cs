@@ -22,6 +22,8 @@ public class TreatmentPlanTherapy
     internal TreatmentPlanTherapy(TreatmentPlan treatmentPlan, TherapyType therapyType)
     {
         TreatmentPlan = treatmentPlan;
+        TreatmentPlanId = treatmentPlan.Id;
         TherapyType = therapyType;
+        TherapyTypeId = therapyType.Id;
     }
 }

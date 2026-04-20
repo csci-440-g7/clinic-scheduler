@@ -1,38 +1,58 @@
 @page "/login"
+@attribute [AllowAnonymous]
 @inject NavigationManager Nav
-@inject ClinicScheduler.Shared.Services.SessionState Session
 
-<h1>Login</h1>
+<MudContainer MaxWidth="MaxWidth.Small" Class="mt-16">
+    <MudPaper Class="pa-8" Elevation="4">
+        <MudText Typo="Typo.h5" Class="mb-6">Sign In</MudText>
 
-<div>
-    <input @bind="email" placeholder="Email" />
-</div>
+        @if (_errorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-4">@_errorMessage</MudAlert>
+        }
 
-<div>
-    <input @bind="password" placeholder="Password" type="password" />
-</div>
+        <form method="post" action="/account/login">
+            <input type="hidden" name="returnUrl" value="@(ReturnUrl ?? "/")" />
 
-<div style="margin-top: 12px;">
-    <label>Role</label>
-    <select @bind="role">
-        <option value="patient">Patient</option>
-        <option value="doctor">Doctor</option>
-        <option value="staff">Staff</option>
-    </select>
-</div>
+            <div class="mb-4">
+                <label for="email" style="display:block; margin-bottom:4px; font-size:0.875rem; color:#666;">Email</label>
+                <input type="email" id="email" name="email" required
+                       placeholder="Email"
+                       style="width:100%; padding:12px; border:1px solid #ccc; border-radius:4px; font-size:1rem; outline:none; box-shadow:none;" />
+            </div>
 
-<button @onclick="HandleLogin">Login</button>
+            <div class="mb-6">
+                <label for="password" style="display:block; margin-bottom:4px; font-size:0.875rem; color:#666;">Password</label>
+                <input type="password" id="password" name="password" required
+                       placeholder="Password"
+                       style="width:100%; padding:12px; border:1px solid #ccc; border-radius:4px; font-size:1rem; outline:none; box-shadow:none;" />
+            </div>
 
-<p><a href="#">Forgot password?</a></p>
+            <button type="submit"
+                    class="mud-button-root mud-button mud-button-filled mud-button-filled-primary mud-ripple mud-button-filled-size-medium"
+                    style="width:100%">
+                <span class="mud-button-label">Sign In</span>
+            </button>
+        </form>
+    </MudPaper>
+</MudContainer>
 
 @code {
-    private string email = "";
-    private string password = "";
-    private string role = "patient";
+    private string? _errorMessage;
 
-    private async Task HandleLogin()
+    [SupplyParameterFromQuery(Name = "returnUrl")]
+    private string? ReturnUrl { get; set; }
+
+    [SupplyParameterFromQuery(Name = "error")]
+    private string? Error { get; set; }
+
+    protected override void OnInitialized()
     {
-        await Session.SetPreAuthAsync(role);
-        Nav.NavigateTo($"/2fa?role={Uri.EscapeDataString(role)}");
+        _errorMessage = Error switch
+        {
+            "1" => "Invalid email or password.",
+            "2" => "Account is locked. Try again later.",
+            _ => null
+        };
     }
 }

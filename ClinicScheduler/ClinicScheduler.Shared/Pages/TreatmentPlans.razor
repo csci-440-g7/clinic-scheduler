@@ -1,0 +1,285 @@
+@page "/treatment-plans"
+@attribute [Authorize(Roles = "Admin,ClinicManager,Staff")]
+@inject ClinicDbContext DbContext
+@inject IRepository<Patient> PatientRepo
+@inject IRepository<Therapist> TherapistRepo
+@inject IRepository<TherapyType> TherapyTypeRepo
+@inject ISnackbar Snackbar
+
+<PageTitle>Treatment Plans</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5">Treatment Plans</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenCreateDialog">
+        New Plan
+    </MudButton>
+</div>
+
+<MudDataGrid T="TreatmentPlan" Items="_plans" Loading="_loading"
+             SortMode="SortMode.Single" Hover="true" Elevation="1">
+    <Columns>
+        <TemplateColumn Title="Patient">
+            <CellTemplate>@context.Item.Patient?.FullName</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Therapist">
+            <CellTemplate>@context.Item.Therapist?.FullName</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Frequency">
+            <CellTemplate>@context.Item.FrequencyPerWeek x/week</CellTemplate>
+        </TemplateColumn>
+        <PropertyColumn Property="p => p.TotalDays" Title="Total Days" />
+        <TemplateColumn Title="Start Date">
+            <CellTemplate>@context.Item.StartDate.ToString("MMM d, yyyy")</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="End Date">
+            <CellTemplate>@context.Item.EndDate.ToString("MMM d, yyyy")</CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Therapies">
+            <CellTemplate>
+                @foreach (var tpt in context.Item.TreatmentPlanTherapies)
+                {
+                    var color = tpt.TherapyType?.ColorCode;
+                    <MudChip T="string" Size="Size.Small" Class="mr-1"
+                             Style="@(!string.IsNullOrEmpty(color) ? $"background:{color};color:#fff;" : "")">
+                        @tpt.TherapyType?.Name
+                    </MudChip>
+                }
+            </CellTemplate>
+        </TemplateColumn>
+        <TemplateColumn Title="Actions" Sortable="false">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               OnClick="@(() => OpenEditDialog(context.Item))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                               Color="Color.Error"
+                               OnClick="@(() => DeleteAsync(context.Item))" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        <MudText Class="pa-4">No treatment plans yet.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+<MudDialog @bind-Visible="_dialogOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_isEdit ? "Edit Treatment Plan" : "New Treatment Plan")</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_errorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">@_errorMessage</MudAlert>
+        }
+        <MudSelect T="int" @bind-Value="_formPatientId" Label="Patient" Required="true"
+                   Variant="Variant.Outlined" Class="mb-3">
+            @foreach (var p in _allPatients)
+            {
+                <MudSelectItem T="int" Value="@p.Id">@p.FullName</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="int" @bind-Value="_formTherapistId" Label="Therapist" Required="true"
+                   Variant="Variant.Outlined" Class="mb-3">
+            @foreach (var t in _allTherapists)
+            {
+                <MudSelectItem T="int" Value="@t.Id">@t.FullName</MudSelectItem>
+            }
+        </MudSelect>
+        <MudSelect T="int" @bind-Value="_formFrequency" Label="Frequency (days/week)" Required="true"
+                   Variant="Variant.Outlined" Class="mb-3">
+            <MudSelectItem T="int" Value="2">2 days/week</MudSelectItem>
+            <MudSelectItem T="int" Value="3">3 days/week</MudSelectItem>
+            <MudSelectItem T="int" Value="4">4 days/week</MudSelectItem>
+        </MudSelect>
+        <MudSelect T="int" @bind-Value="_formTotalDays" Label="Total Days" Required="true"
+                   Variant="Variant.Outlined" Class="mb-3">
+            <MudSelectItem T="int" Value="20">20 days</MudSelectItem>
+            <MudSelectItem T="int" Value="30">30 days</MudSelectItem>
+            <MudSelectItem T="int" Value="50">50 days</MudSelectItem>
+        </MudSelect>
+        <MudDatePicker @bind-Date="_formStartDate" Label="Start Date" Required="true"
+                       Variant="Variant.Outlined" Class="mb-3"
+                       Editable="true" DateFormat="MM/dd/yyyy" />
+        <MudSelect T="int" @bind-SelectedValues="_formTherapyTypeIds"
+                   Label="Therapy Types" MultiSelection="true"
+                   MultiSelectionTextFunc="@(ids => string.Join(", ", ids.Select(s => { int.TryParse(s, out var id); return _allTherapyTypes.FirstOrDefault(t => t.Id == id)?.Name ?? s; })))"
+                   Variant="Variant.Outlined" Class="mb-3">
+            @foreach (var tt in _allTherapyTypes)
+            {
+                <MudSelectItem T="int" Value="@tt.Id">@tt.Name</MudSelectItem>
+            }
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _dialogOpen = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">
+            @(_isEdit ? "Save" : "Create")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<TreatmentPlan> _plans = [];
+    private List<Patient> _allPatients = [];
+    private List<Therapist> _allTherapists = [];
+    private List<TherapyType> _allTherapyTypes = [];
+    private bool _loading = true;
+    private bool _dialogOpen;
+    private bool _isEdit;
+    private TreatmentPlan? _editTarget;
+    private int _formPatientId;
+    private int _formTherapistId;
+    private int _formFrequency = 3;
+    private int _formTotalDays = 30;
+    private DateTime? _formStartDate;
+    private IEnumerable<int> _formTherapyTypeIds = [];
+    private string? _errorMessage;
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    protected override async Task OnInitializedAsync()
+    {
+        _allPatients = (await PatientRepo.GetAllAsync()).ToList();
+        _allTherapists = (await TherapistRepo.GetAllAsync()).ToList();
+        _allTherapyTypes = (await TherapyTypeRepo.GetAllAsync()).ToList();
+        if (_allPatients.Count > 0) _formPatientId = _allPatients[0].Id;
+        if (_allTherapists.Count > 0) _formTherapistId = _allTherapists[0].Id;
+        await LoadPlansAsync();
+    }
+
+    private async Task LoadPlansAsync()
+    {
+        _loading = true;
+        _plans = await DbContext.TreatmentPlans
+            .Include(p => p.Patient)
+            .Include(p => p.Therapist)
+            .Include(p => p.TreatmentPlanTherapies)
+                .ThenInclude(tpt => tpt.TherapyType)
+            .OrderByDescending(p => p.CreatedAt)
+            .ToListAsync();
+        _loading = false;
+    }
+
+    private void OpenCreateDialog()
+    {
+        _isEdit = false;
+        _editTarget = null;
+        _formPatientId = _allPatients.Count > 0 ? _allPatients[0].Id : 0;
+        _formTherapistId = _allTherapists.Count > 0 ? _allTherapists[0].Id : 0;
+        _formFrequency = 3;
+        _formTotalDays = 30;
+        _formStartDate = DateTime.Today;
+        _formTherapyTypeIds = [];
+        _errorMessage = null;
+        _dialogOpen = true;
+    }
+
+    private void OpenEditDialog(TreatmentPlan plan)
+    {
+        _isEdit = true;
+        _editTarget = plan;
+        _formPatientId = plan.PatientId;
+        _formTherapistId = plan.TherapistId;
+        _formFrequency = plan.FrequencyPerWeek;
+        _formTotalDays = plan.TotalDays;
+        _formStartDate = plan.StartDate.ToDateTime(TimeOnly.MinValue);
+        _formTherapyTypeIds = plan.TreatmentPlanTherapies.Select(tpt => tpt.TherapyTypeId).ToList();
+        _errorMessage = null;
+        _dialogOpen = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _errorMessage = null;
+        if (_formStartDate is null)
+        {
+            _errorMessage = "Start date is required.";
+            return;
+        }
+        try
+        {
+            var startDate = DateOnly.FromDateTime(_formStartDate.Value.Date);
+            var selectedTherapyTypeIds = _formTherapyTypeIds.ToHashSet();
+
+            if (_isEdit && _editTarget is not null)
+            {
+                // Reload with tracking for update
+                var plan = await DbContext.TreatmentPlans
+                    .Include(p => p.Therapist)
+                    .Include(p => p.TreatmentPlanTherapies)
+                    .FirstOrDefaultAsync(p => p.Id == _editTarget.Id)
+                    ?? throw new InvalidOperationException("Plan not found.");
+
+                plan.UpdateSchedule(_formFrequency, _formTotalDays, startDate);
+
+                if (plan.TherapistId != _formTherapistId)
+                {
+                    var newTherapist = await TherapistRepo.GetByIdAsync(_formTherapistId)
+                        ?? throw new InvalidOperationException("Therapist not found.");
+                    plan.ChangeTherapist(newTherapist);
+                }
+
+                // Sync therapy types
+                var currentIds = plan.TreatmentPlanTherapies.Select(t => t.TherapyTypeId).ToHashSet();
+                foreach (var tpt in plan.TreatmentPlanTherapies.Where(t => !selectedTherapyTypeIds.Contains(t.TherapyTypeId)).ToList())
+                    DbContext.TreatmentPlanTherapies.Remove(tpt);
+                foreach (var id in selectedTherapyTypeIds.Where(id => !currentIds.Contains(id)))
+                {
+                    var tt = await DbContext.TherapyTypes.FindAsync(id)
+                        ?? throw new InvalidOperationException($"TherapyType {id} not found.");
+                    plan.AddTherapy(tt);
+                }
+
+                await DbContext.SaveChangesAsync();
+            }
+            else
+            {
+                var patient = await PatientRepo.GetByIdAsync(_formPatientId)
+                    ?? throw new InvalidOperationException("Patient not found.");
+                var therapist = await TherapistRepo.GetByIdAsync(_formTherapistId)
+                    ?? throw new InvalidOperationException("Therapist not found.");
+
+                var plan = new TreatmentPlan(patient, therapist, _formFrequency, _formTotalDays, startDate);
+                foreach (var id in selectedTherapyTypeIds)
+                {
+                    var tt = await DbContext.TherapyTypes.FindAsync(id)
+                        ?? throw new InvalidOperationException($"TherapyType {id} not found.");
+                    plan.AddTherapy(tt);
+                }
+                DbContext.TreatmentPlans.Add(plan);
+                await DbContext.SaveChangesAsync();
+            }
+
+            _dialogOpen = false;
+            Snackbar.Add(_isEdit ? "Plan updated." : "Plan created.", Severity.Success);
+            await LoadPlansAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task DeleteAsync(TreatmentPlan plan)
+    {
+        try
+        {
+            var tracked = await DbContext.TreatmentPlans
+                .Include(p => p.TreatmentPlanTherapies)
+                .FirstOrDefaultAsync(p => p.Id == plan.Id);
+            if (tracked is not null)
+            {
+                DbContext.TreatmentPlanTherapies.RemoveRange(tracked.TreatmentPlanTherapies);
+                DbContext.TreatmentPlans.Remove(tracked);
+                await DbContext.SaveChangesAsync();
+            }
+            Snackbar.Add("Plan deleted.", Severity.Info);
+            await LoadPlansAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

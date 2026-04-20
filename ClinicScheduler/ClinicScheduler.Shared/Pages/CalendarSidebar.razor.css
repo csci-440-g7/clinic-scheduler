@@ -288,3 +288,25 @@
 .sidebar-req-decline:hover {
     background: #fef2f2;
 }
+
+.sidebar-cancel-deny-form {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.sidebar-cancel-deny-input {
+    width: 100%;
+    padding: 5px 8px;
+    border: 1px solid #d1d5db;
+    border-radius: 7px;
+    font: inherit;
+    font-size: 11px;
+    box-sizing: border-box;
+    background: #fff;
+    color: #111827;
+}
+
+.sidebar-cancel-deny-input::placeholder {
+    color: #9ca3af;
+}

@@ -1,5 +1,7 @@
-@using ClinicScheduler.Shared.Services
-@inject ClinicDataStore Data
+@inject ClinicDbContext DbContext
+@inject IRepository<Therapist> TherapistRepo
+@inject AuthenticationStateProvider AuthState
+@inject ISnackbar Snackbar
 
 <div class="raq-backdrop"
      @onclick="OnClose"
@@ -19,39 +21,25 @@
 
         <div class="raq-fields">
             <label class="raq-label">
-                Doctor <span class="raq-req">*</span>
-                <select class="raq-input" @bind="_doctorId">
-                    <option value="">— select doctor —</option>
-                    @foreach (var d in MockClinicData.Doctors)
+                Preferred therapist
+                <select class="raq-input" @bind="_therapistId">
+                    <option value="0">— no preference —</option>
+                    @foreach (var t in _therapists)
                     {
-                        <option value="@d.Id">@d.Name (@d.Specialty)</option>
+                        <option value="@t.Id">@t.FullName @(!string.IsNullOrEmpty(t.Specialty) ? $"({t.Specialty})" : "")</option>
                     }
-                </select>
-            </label>
-            <label class="raq-label">
-                Appointment type
-                <select class="raq-input" @bind="_type">
-                    <option value="medical">Medical visit</option>
-                    <option value="lab">Lab / Procedure</option>
-                    <option value="intake">Intake</option>
                 </select>
             </label>
             <label class="raq-label">
                 Preferred date <span class="raq-req">*</span>
                 <input class="raq-input" type="date" @bind="_date" />
             </label>
-            <div class="raq-time-row">
-                <label class="raq-label">
-                    Start time <span class="raq-req">*</span>
-                    <input class="raq-input" type="time" @bind="_startTime" />
-                </label>
-                <label class="raq-label">
-                    End time <span class="raq-req">*</span>
-                    <input class="raq-input" type="time" @bind="_endTime" />
-                </label>
-            </div>
             <label class="raq-label">
-                Reason for visit
+                Preferred time <span class="raq-req">*</span>
+                <input class="raq-input" type="time" @bind="_time" />
+            </label>
+            <label class="raq-label">
+                Reason for visit <span class="raq-req">*</span>
                 <textarea class="raq-input raq-textarea"
                           @bind="_reason"
                           placeholder="Briefly describe why you are requesting this appointment"
@@ -59,54 +47,75 @@
             </label>
         </div>
 
-        <p class="raq-note">Your request will appear on your calendar as <strong>Pending</strong> until clinic staff confirms it.</p>
+        <p class="raq-note">Your request will appear as <strong>Pending</strong> until clinic staff confirms it.</p>
 
         <div class="raq-actions">
             <button type="button" class="raq-btn-cancel" @onclick="OnClose">Cancel</button>
-            <button type="button" class="raq-btn-submit" @onclick="Submit">Submit Request</button>
+            <button type="button" class="raq-btn-submit" @onclick="SubmitAsync">Submit Request</button>
         </div>
     </div>
 </div>
 
 @code {
-    [Parameter] public string PatientId { get; set; } = "";
     [Parameter] public DateTime InitialDate { get; set; } = DateTime.Today;
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnRequested { get; set; }
 
-    private string _doctorId = "";
-    private string _type = "medical";
+    private List<Therapist> _therapists = [];
+    private int _therapistId;
     private DateTime _date;
-    private TimeOnly _startTime = new(9, 0);
-    private TimeOnly _endTime = new(9, 30);
+    private TimeOnly _time = new(9, 0);
     private string _reason = "";
     private string _error = "";
 
-    protected override void OnInitialized() => _date = InitialDate;
+    protected override async Task OnInitializedAsync()
+    {
+        _date = InitialDate;
+        _therapists = (await TherapistRepo.GetAllAsync()).ToList();
+    }
 
-    private void Submit()
+    private async Task SubmitAsync()
     {
         _error = "";
-        if (string.IsNullOrWhiteSpace(_doctorId)) { _error = "Please select a doctor.";          return; }
-        if (_endTime <= _startTime)               { _error = "End time must be after start time."; return; }
 
-        var doctor = MockClinicData.Doctors.FirstOrDefault(d => d.Id == _doctorId);
-        var title  = doctor is not null ? $"Appointment request — {doctor.Name}" : "Appointment request";
+        if (string.IsNullOrWhiteSpace(_reason))
+        {
+            _error = "Please provide a reason for your visit.";
+            return;
+        }
 
-        Data.AddAppointment(new MockClinicData.Appointment(
-            $"a-{Guid.NewGuid():N}"[..10],
-            _date.Date + _startTime.ToTimeSpan(),
-            _date.Date + _endTime.ToTimeSpan(),
-            title,
-            _type,
-            PatientId,
-            _doctorId,
-            "",
-            "",
-            string.IsNullOrWhiteSpace(_reason) ? null : _reason.Trim(),
-            "pending"));
+        var authState = await AuthState.GetAuthenticationStateAsync();
+        var user = authState.User;
 
-        OnRequested.InvokeAsync();
+        if (user.Identity is null || !user.Identity.IsAuthenticated)
+        {
+            _error = "You must be logged in to submit a request.";
+            return;
+        }
+
+        var email = user.Identity.Name;
+        var patient = await DbContext.Patients.FirstOrDefaultAsync(p => p.Email == email);
+
+        if (patient is null)
+        {
+            _error = "Patient record not found. Please contact the clinic.";
+            return;
+        }
+
+        Therapist? preferredTherapist = _therapistId > 0
+            ? await TherapistRepo.GetByIdAsync(_therapistId)
+            : null;
+
+        var preferredDateTime = _date.Date.Add(_time.ToTimeSpan()).ToUniversalTime();
+
+        var request = new AppointmentRequest(patient, _reason.Trim(), preferredTherapist);
+        request.SetPreferredDateTime(preferredDateTime);
+
+        DbContext.AppointmentRequests.Add(request);
+        await DbContext.SaveChangesAsync();
+
+        Snackbar.Add("Appointment request submitted", Severity.Success);
+        await OnRequested.InvokeAsync();
     }
 }
 
@@ -123,7 +132,6 @@
     .raq-req { color: #dc2626; }
     .raq-input { width: 100%; padding: 8px 10px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box; font: inherit; background: #fff; }
     .raq-textarea { resize: vertical; min-height: 72px; }
-    .raq-time-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
     .raq-note { margin: 14px 0 0; font-size: 12px; color: #6b7280; line-height: 1.5; }
     .raq-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 14px; }
     .raq-btn-cancel { padding: 8px 16px; background: #fff; border: 1px solid #d1d5db; border-radius: 8px; cursor: pointer; font: inherit; color: #374151; }

@@ -1,0 +1,213 @@
+@page "/staff/onboard"
+@attribute [Authorize(Roles = "Admin")]
+@inject IRepository<Therapist> TherapistRepo
+@inject ISnackbar Snackbar
+@inject NavigationManager Nav
+
+<PageTitle>Onboard Staff</PageTitle>
+
+<div class="d-flex align-center mb-4 gap-2">
+    <MudIconButton Icon="@Icons.Material.Filled.ArrowBack" OnClick="@(() => Nav.NavigateTo("/therapists"))" />
+    <MudText Typo="Typo.h5">Onboard New Staff Member</MudText>
+</div>
+
+<!-- Step indicator -->
+<MudPaper Class="pa-4 mb-4" Elevation="1">
+    <div class="d-flex align-center">
+        @for (int i = 0; i < _stepTitles.Length; i++)
+        {
+            var idx = i;
+            var isActive = idx == _step;
+            var isDone = idx < _step;
+            <div class="d-flex align-center gap-2">
+                <MudAvatar Size="Size.Small"
+                           Color="@(isDone ? Color.Success : isActive ? Color.Secondary : Color.Default)">
+                    @if (isDone)
+                    {
+                        <MudIcon Icon="@Icons.Material.Filled.Check" Size="Size.Small" />
+                    }
+                    else
+                    {
+                        @(idx + 1)
+                    }
+                </MudAvatar>
+                <MudText Typo="Typo.body2"
+                         Color="@(isActive ? Color.Secondary : Color.Default)">
+                    @_stepTitles[idx]
+                </MudText>
+            </div>
+            @if (idx < _stepTitles.Length - 1)
+            {
+                <MudDivider Class="flex-grow-1 mx-3" />
+            }
+        }
+    </div>
+</MudPaper>
+
+@if (_errorMessage is not null)
+{
+    <MudAlert Severity="Severity.Error" Class="mb-3" ShowCloseIcon="true"
+              CloseIconClicked="@(() => _errorMessage = null)">
+        @_errorMessage
+    </MudAlert>
+}
+
+<!-- Step 0: Personal Info -->
+@if (_step == 0)
+{
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-4">Personal Information</MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_firstName" Label="First Name" Required="true"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_lastName" Label="Last Name" Required="true"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_email" Label="Email" Required="true"
+                              Variant="Variant.Outlined" InputType="InputType.Email" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_phone" Label="Phone (optional)"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+        </MudGrid>
+        <div class="d-flex justify-end mt-4">
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="GoToStep1"
+                       EndIcon="@Icons.Material.Filled.ArrowForward">
+                Next
+            </MudButton>
+        </div>
+    </MudPaper>
+}
+
+<!-- Step 1: Role & Specialty -->
+@if (_step == 1)
+{
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-1">Role &amp; Specialty</MudText>
+        <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
+            Assign a clinical specialty. This can be updated later.
+        </MudText>
+        <MudGrid>
+            <MudItem xs="12" sm="6">
+                <MudSelect T="string" @bind-Value="_specialty" Label="Specialty (optional)"
+                           Variant="Variant.Outlined">
+                    <MudSelectItem T="string" Value="@("")">None</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("Chiropractic")">Chiropractic</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("Physical Therapy")">Physical Therapy</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("Massage Therapy")">Massage Therapy</MudSelectItem>
+                    <MudSelectItem T="string" Value="@("Pain Management")">Pain Management</MudSelectItem>
+                </MudSelect>
+            </MudItem>
+        </MudGrid>
+        <div class="d-flex justify-space-between mt-4">
+            <MudButton Variant="Variant.Text" OnClick="@(() => _step = 0)"
+                       StartIcon="@Icons.Material.Filled.ArrowBack">
+                Back
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="@(() => _step = 2)"
+                       EndIcon="@Icons.Material.Filled.ArrowForward">
+                Next
+            </MudButton>
+        </div>
+    </MudPaper>
+}
+
+<!-- Step 2: Confirm -->
+@if (_step == 2)
+{
+    <MudPaper Class="pa-4" Elevation="1">
+        <MudText Typo="Typo.h6" Class="mb-4">Confirm &amp; Finish</MudText>
+
+        <MudSimpleTable Dense="true" Class="mb-4" Elevation="0">
+            <tbody>
+                <tr><td><b>Name</b></td><td>@_firstName @_lastName</td></tr>
+                <tr><td><b>Email</b></td><td>@_email</td></tr>
+                @if (!string.IsNullOrWhiteSpace(_phone))
+                {
+                    <tr><td><b>Phone</b></td><td>@_phone</td></tr>
+                }
+                <tr>
+                    <td><b>Specialty</b></td>
+                    <td>
+                        @if (!string.IsNullOrWhiteSpace(_specialty))
+                        {
+                            <MudChip T="string" Size="Size.Small" Color="Color.Info">@_specialty</MudChip>
+                        }
+                        else
+                        {
+                            <span class="mud-text-secondary">None</span>
+                        }
+                    </td>
+                </tr>
+            </tbody>
+        </MudSimpleTable>
+
+        <div class="d-flex justify-space-between mt-2">
+            <MudButton Variant="Variant.Text" OnClick="@(() => _step = 1)"
+                       StartIcon="@Icons.Material.Filled.ArrowBack">
+                Back
+            </MudButton>
+            <MudButton Variant="Variant.Filled" Color="Color.Success" OnClick="FinishAsync"
+                       Disabled="_saving" EndIcon="@Icons.Material.Filled.Check">
+                @(_saving ? "Saving…" : "Confirm & Finish")
+            </MudButton>
+        </div>
+    </MudPaper>
+}
+
+@code {
+    private static readonly string[] _stepTitles = ["Personal Info", "Role & Specialty", "Confirm"];
+
+    private int _step;
+    private bool _saving;
+    private string? _errorMessage;
+
+    private string _firstName = "";
+    private string _lastName = "";
+    private string _email = "";
+    private string? _phone;
+    private string? _specialty;
+
+    private void GoToStep1()
+    {
+        _errorMessage = null;
+        if (string.IsNullOrWhiteSpace(_firstName) || string.IsNullOrWhiteSpace(_lastName))
+        {
+            _errorMessage = "First and last name are required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_email))
+        {
+            _errorMessage = "Email is required.";
+            return;
+        }
+        _step = 1;
+    }
+
+    private async Task FinishAsync()
+    {
+        _errorMessage = null;
+        _saving = true;
+        try
+        {
+            var therapist = new Therapist(
+                _firstName, _lastName, _email,
+                string.IsNullOrWhiteSpace(_phone) ? null : _phone,
+                string.IsNullOrWhiteSpace(_specialty) ? null : _specialty);
+
+            await TherapistRepo.AddAsync(therapist);
+            Snackbar.Add($"{_firstName} {_lastName} onboarded successfully.", Severity.Success);
+            Nav.NavigateTo("/therapists");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+            _saving = false;
+        }
+    }
+}

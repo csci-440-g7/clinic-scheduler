@@ -1,23 +1,22 @@
 @page "/dashboard/staff"
 @inject NavigationManager Nav
-@inject ClinicScheduler.Shared.Services.SessionState Session
-@inject ClinicDataStore Data
+@inject ClinicDbContext DbContext
+@inject AuthenticationStateProvider AuthState
+@inject ISnackbar Snackbar
 
-@using ClinicScheduler.Shared.Services
+@attribute [Authorize(Roles = "Staff")]
 
 <div class="role-shell">
     <div class="role-header">
         <h2>@StaffDashboardTitle</h2>
         <div class="role-actions">
             <span class="role-badge">Role: Staff</span>
-            <button class="link-button" @onclick="SignOut">Sign out</button>
         </div>
     </div>
 
-    @if (!Session.IsAuthenticated || Session.Role != "staff")
+    @if (_staffNotFound)
     {
         <p>You are not signed in as staff.</p>
-        <button @onclick="@(() => Nav.NavigateTo("/login", true))">Go to Login</button>
     }
     else
     {
@@ -50,7 +49,7 @@
                                 @foreach (var d in _filteredDoctors)
                                 {
                                     <li class="list-item">
-                                        <div class="list-title">@d.Name</div>
+                                        <div class="list-title">@d.FullName</div>
                                         <div class="list-sub">@d.Specialty</div>
                                     </li>
                                 }
@@ -78,7 +77,7 @@
                                 {
                                     <li class="list-item">
                                         <button type="button" class="list-item-btn" @onclick="() => OpenPatientDetail(p)">
-                                            <div class="list-title">@p.Name</div>
+                                            <div class="list-title">@p.FullName</div>
                                             <div class="list-sub">@p.Phone</div>
                                             <div class="list-hint">View details</div>
                                         </button>
@@ -104,27 +103,23 @@
             <div class="modal-fields">
                 <div class="modal-field">
                     <span class="modal-k">Name</span>
-                    <span class="modal-v">@_patientDetail.Name</span>
+                    <span class="modal-v">@_patientDetail.FullName</span>
                 </div>
                 <div class="modal-field">
                     <span class="modal-k">Date of birth</span>
-                    <span class="modal-v">@_patientDetail.Dob.ToString("MMM d, yyyy")</span>
+                    <span class="modal-v">@_patientDetail.DateOfBirth.ToString("MMM d, yyyy")</span>
                 </div>
                 <div class="modal-field">
                     <span class="modal-k">Phone</span>
-                    <span class="modal-v">@_patientDetail.Phone</span>
+                    <span class="modal-v">@(_patientDetail.Phone ?? "—")</span>
                 </div>
                 <div class="modal-field">
                     <span class="modal-k">Email</span>
                     <span class="modal-v">@_patientDetail.Email</span>
                 </div>
                 <div class="modal-field modal-field-block">
-                    <span class="modal-k">Allergies</span>
-                    <span class="modal-v">@(string.IsNullOrWhiteSpace(_patientDetail.Allergies) ? "—" : _patientDetail.Allergies)</span>
-                </div>
-                <div class="modal-field modal-field-block">
-                    <span class="modal-k">Medications</span>
-                    <span class="modal-v">@(string.IsNullOrWhiteSpace(_patientDetail.Medications) ? "—" : _patientDetail.Medications)</span>
+                    <span class="modal-k">Notes</span>
+                    <span class="modal-v">@(string.IsNullOrWhiteSpace(_patientDetail.Notes) ? "—" : _patientDetail.Notes)</span>
                 </div>
             </div>
         </div>
@@ -133,24 +128,38 @@
 
 @code {
     private string activeTab = "calendar";
+    private bool _staffNotFound;
+    private string? _staffName;
 
-    private List<MockClinicData.Doctor> _filteredDoctors = new();
-    private List<MockClinicData.Patient> _filteredPatients = new();
+    private List<Therapist> _filteredDoctors = new();
+    private List<Patient> _filteredPatients = new();
 
     private string doctorSearchTerm = "";
     private string patientSearchTerm = "";
 
-    private MockClinicData.Patient? _patientDetail;
+    private Patient? _patientDetail;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        _filteredDoctors = MockClinicData.Doctors.ToList();
-        _filteredPatients = Data.Patients.ToList();
+        var authStateResult = await AuthState.GetAuthenticationStateAsync();
+        var user = authStateResult.User;
+        var email = user.Identity?.Name;
+
+        if (string.IsNullOrEmpty(email))
+        {
+            _staffNotFound = true;
+            return;
+        }
+
+        _staffName = user.Identity?.Name?.Split('@')[0] ?? "Staff";
+
+        _filteredDoctors = await DbContext.Therapists.ToListAsync();
+        _filteredPatients = await DbContext.Patients.ToListAsync();
     }
 
-    private void OpenPatientDetail(MockClinicData.Patient p)
+    private void OpenPatientDetail(Patient p)
     {
-        _patientDetail = Data.GetPatient(p.Id) ?? p;
+        _patientDetail = p;
     }
 
     private void ClosePatientDetail() => _patientDetail = null;
@@ -164,28 +173,26 @@
         }
     }
 
-    private void OnDoctorSearchChanged(string? term)
+    private async Task OnDoctorSearchChanged(string? term)
     {
         doctorSearchTerm = term ?? "";
-        var t = doctorSearchTerm.Trim().ToLowerInvariant();
+        var t = doctorSearchTerm.Trim();
         _filteredDoctors = string.IsNullOrWhiteSpace(t)
-            ? MockClinicData.Doctors.ToList()
-            : MockClinicData.Doctors.Where(d => d.Name.ToLowerInvariant().Contains(t)).ToList();
+            ? await DbContext.Therapists.ToListAsync()
+            : await DbContext.Therapists
+                .Where(d => d.FirstName.Contains(t) || d.LastName.Contains(t))
+                .ToListAsync();
     }
 
-    private void OnPatientSearchChanged(string? term)
+    private async Task OnPatientSearchChanged(string? term)
     {
         patientSearchTerm = term ?? "";
-        var t = patientSearchTerm.Trim().ToLowerInvariant();
+        var t = patientSearchTerm.Trim();
         _filteredPatients = string.IsNullOrWhiteSpace(t)
-            ? Data.Patients.ToList()
-            : Data.Patients.Where(p => p.Name.ToLowerInvariant().Contains(t)).ToList();
-    }
-
-    private async Task SignOut()
-    {
-        await Session.SignOutAsync();
-        Nav.NavigateTo("/login");
+            ? await DbContext.Patients.ToListAsync()
+            : await DbContext.Patients
+                .Where(p => p.FirstName.Contains(t) || p.LastName.Contains(t))
+                .ToListAsync();
     }
 
     private void SetTab(string tab)
@@ -230,8 +237,9 @@
 
     private string GetTabClass(string tab) => tab == activeTab ? "tab active" : "tab";
 
-    private string StaffDashboardTitle =>
-        MockClinicData.DashboardTitleFor(MockClinicData.DemoStaffDisplayName);
+    private string StaffDashboardTitle => _staffName is not null
+        ? $"{_staffName}'s Dashboard"
+        : "Staff Dashboard";
 }
 
 <style>

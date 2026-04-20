@@ -1,25 +1,25 @@
 @page "/dashboard/patient"
 @inject NavigationManager Nav
-@inject ClinicScheduler.Shared.Services.SessionState Session
-@inject ClinicDataStore Data
+@inject ClinicDbContext DbContext
+@inject IRepository<Therapist> TherapistRepo
+@inject AuthenticationStateProvider AuthState
+@inject ISnackbar Snackbar
 
-@using ClinicScheduler.Shared.Services
+@attribute [Authorize(Roles = "Patient")]
 
 <div class="role-shell">
     <div class="role-header">
         <h2>@PatientDashboardTitle</h2>
         <div class="role-actions">
             <span class="role-badge">Role: Patient</span>
-            <button class="link-button" @onclick="SignOut">Sign out</button>
         </div>
     </div>
 
-    @if (!Session.IsAuthenticated || Session.Role != "patient")
+    @if (_patientNotFound)
     {
-        <p>You are not signed in as a patient.</p>
-        <button @onclick="@(() => Nav.NavigateTo("/login", true))">Go to Login</button>
+        <p>Patient record not found.</p>
     }
-    else
+    else if (_patient is not null)
     {
         <div class="role-tabs">
             <button class="@GetTabClass("calendar")" @onclick="@(() => SetTab("calendar"))">Calendar</button>
@@ -38,7 +38,7 @@
                     <h3>Personal Info</h3>
 
                     <label class="field-label">Name</label>
-                    <input class="field-input" @bind="_editName" disabled />
+                    <input class="field-input" value="@_patient.FullName" disabled />
 
                     <label class="field-label">Phone</label>
                     <input class="field-input" @bind="_editPhone" />
@@ -46,14 +46,11 @@
                     <label class="field-label">Email</label>
                     <input class="field-input" @bind="_editEmail" />
 
-                    <label class="field-label">Allergies</label>
-                    <textarea class="field-textarea" rows="2" placeholder="List known allergies" @bind="_editAllergies" @bind:event="oninput"></textarea>
-
-                    <label class="field-label">Medications</label>
-                    <textarea class="field-textarea" rows="3" placeholder="Current medications and dosing" @bind="_editMedications" @bind:event="oninput"></textarea>
+                    <label class="field-label">Date of Birth</label>
+                    <input class="field-input" value="@_patient.DateOfBirth.ToString("yyyy-MM-dd")" disabled />
 
                     <div style="margin-top: 12px;">
-                        <button class="primary" @onclick="SaveProfile">Save</button>
+                        <button class="primary" @onclick="SaveProfileAsync">Save</button>
                     </div>
 
                     @if (!string.IsNullOrWhiteSpace(_profileSavedMessage))
@@ -66,9 +63,9 @@
             {
                 <div class="panel">
                     <h3>Doctor Notes</h3>
-                    <p class="muted">Notes for your care. Filter by doctor to hide others.</p>
+                    <p class="muted">Notes from your appointments.</p>
 
-                    @if (_patientNotes.Count == 0)
+                    @if (_appointmentNotes.Count == 0)
                     {
                         <p>No notes found.</p>
                     }
@@ -85,7 +82,7 @@
                             </select>
                         </div>
 
-                        @if (!FilteredPatientNotes.Any())
+                        @if (!FilteredAppointmentNotes.Any())
                         {
                             <p class="muted">No notes for this selection.</p>
                         }
@@ -95,15 +92,15 @@
                             {
                                 <h4 class="note-group-heading">@group.Key</h4>
                                 <ul class="note-list">
-                                    @foreach (var n in group.OrderByDescending(x => x.Date))
+                                    @foreach (var a in group.OrderByDescending(x => x.StartTime))
                                     {
                                         <li class="note-item">
                                             <div class="note-meta">
-                                                <span>@n.Date.ToString("MMM d, yyyy")</span>
+                                                <span>@a.StartTime.ToLocalTime().ToString("MMM d, yyyy")</span>
                                                 <span class="dot">•</span>
-                                                <span>Author: @n.Author</span>
+                                                <span>Author: @a.Therapist.FullName</span>
                                             </div>
-                                            <div class="note-text">@n.Text</div>
+                                            <div class="note-text">@a.Notes</div>
                                         </li>
                                     }
                                 </ul>
@@ -119,47 +116,63 @@
 @code {
     private string activeTab = "calendar";
 
-    private const string DemoPatientId = "p1";
-
-    private MockClinicData.Patient _patient = default!;
-    private List<MockClinicData.Note> _patientNotes = new();
+    private Patient? _patient;
+    private bool _patientNotFound;
+    private List<Appointment> _appointmentNotes = new();
     private string _notesDoctorFilter = "";
 
-    private string _editName = "";
     private string _editPhone = "";
     private string _editEmail = "";
-    private string _editAllergies = "";
-    private string _editMedications = "";
     private string? _profileSavedMessage;
 
-    protected override void OnInitialized()
+    protected override async Task OnInitializedAsync()
     {
-        _patient = Data.GetPatient(DemoPatientId) ?? MockClinicData.Patients[0];
-        RefreshPatientNotes();
+        var authStateResult = await AuthState.GetAuthenticationStateAsync();
+        var user = authStateResult.User;
+        var email = user.Identity?.Name;
 
-        _editName = _patient.Name;
-        _editPhone = _patient.Phone;
+        if (string.IsNullOrEmpty(email))
+        {
+            _patientNotFound = true;
+            return;
+        }
+
+        _patient = await DbContext.Patients.FirstOrDefaultAsync(p => p.Email == email);
+
+        if (_patient is null)
+        {
+            _patientNotFound = true;
+            return;
+        }
+
+        _editPhone = _patient.Phone ?? "";
         _editEmail = _patient.Email;
-        _editAllergies = _patient.Allergies;
-        _editMedications = _patient.Medications;
+
+        await LoadAppointmentNotesAsync();
     }
 
-    private void RefreshPatientNotes()
+    private async Task LoadAppointmentNotesAsync()
     {
-        _patientNotes = Data.NotesForPatient(_patient.Id);
+        if (_patient is null) return;
+
+        _appointmentNotes = await DbContext.Appointments
+            .Include(a => a.Therapist)
+            .Where(a => a.PatientId == _patient.Id && a.Notes != null)
+            .OrderByDescending(a => a.StartTime)
+            .ToListAsync();
     }
 
     private IEnumerable<string> _distinctAuthors =>
-        _patientNotes.Select(n => n.Author).Distinct().OrderBy(a => a, StringComparer.OrdinalIgnoreCase);
+        _appointmentNotes.Select(a => a.Therapist.FullName).Distinct().OrderBy(a => a, StringComparer.OrdinalIgnoreCase);
 
-    private IEnumerable<MockClinicData.Note> FilteredPatientNotes =>
+    private IEnumerable<Appointment> FilteredAppointmentNotes =>
         string.IsNullOrEmpty(_notesDoctorFilter)
-            ? _patientNotes
-            : _patientNotes.Where(n => n.Author == _notesDoctorFilter);
+            ? _appointmentNotes
+            : _appointmentNotes.Where(a => a.Therapist.FullName == _notesDoctorFilter);
 
-    private IEnumerable<IGrouping<string, MockClinicData.Note>> NotesGroupedByDoctor =>
-        FilteredPatientNotes
-            .GroupBy(n => n.Author)
+    private IEnumerable<IGrouping<string, Appointment>> NotesGroupedByDoctor =>
+        FilteredAppointmentNotes
+            .GroupBy(a => a.Therapist.FullName)
             .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase);
 
     protected override void OnParametersSet()
@@ -171,25 +184,23 @@
         }
     }
 
-    private void SaveProfile()
+    private async Task SaveProfileAsync()
     {
-        var updated = _patient with
+        if (_patient is null) return;
+
+        _profileSavedMessage = null;
+
+        try
         {
-            Phone = _editPhone?.Trim() ?? "",
-            Email = _editEmail?.Trim() ?? "",
-            Allergies = _editAllergies?.Trim() ?? "",
-            Medications = _editMedications?.Trim() ?? ""
-        };
-
-        Data.UpdatePatient(updated);
-        _patient = Data.GetPatient(DemoPatientId) ?? updated;
-        _profileSavedMessage = "Profile saved.";
-    }
-
-    private async Task SignOut()
-    {
-        await Session.SignOutAsync();
-        Nav.NavigateTo("/login");
+            _patient.UpdateContactInfo(_editEmail?.Trim() ?? "", _editPhone?.Trim());
+            await DbContext.SaveChangesAsync();
+            _profileSavedMessage = "Profile saved.";
+            Snackbar.Add("Profile saved.", Severity.Success);
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error saving profile: {ex.Message}", Severity.Error);
+        }
     }
 
     private void SetTab(string tab)
@@ -234,8 +245,9 @@
 
     private string GetTabClass(string tab) => tab == activeTab ? "tab active" : "tab";
 
-    private string PatientDashboardTitle =>
-        MockClinicData.DashboardTitleFor(MockClinicData.FirstName(_patient.Name));
+    private string PatientDashboardTitle => _patient is not null
+        ? $"{_patient.FullName}'s Dashboard"
+        : "Patient Dashboard";
 }
 
 <style>

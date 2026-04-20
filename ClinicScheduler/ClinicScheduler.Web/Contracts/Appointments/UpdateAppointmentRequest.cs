@@ -12,24 +12,18 @@ public sealed class UpdateAppointmentRequest
     /// Identifier of the patient for the appointment.
     /// </summary>
     /// <example>12345</example>
-    [Required]
-    [Range(1, int.MaxValue)]
     public int PatientId { get; init; }
     
     /// <summary>
     /// Identifier of the therapist for the appointment.
     /// </summary>
     /// <example>12345</example>
-    [Required]
-    [Range(1, int.MaxValue)]
     public int TherapistId { get; init; }
     
     /// <summary>
     /// Identifier of the room to reserve for the appointment.
     /// </summary>
     /// <example>12345</example>
-    [Required]
-    [Range(1, int.MaxValue)]
     public int RoomId { get; init; }
     
     /// <summary>

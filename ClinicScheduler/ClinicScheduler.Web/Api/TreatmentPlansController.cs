@@ -6,17 +6,20 @@ using Microsoft.EntityFrameworkCore;
 
 namespace ClinicScheduler.Web.Api;
 
+/// <summary>Manages treatment plan resources.</summary>
 [ApiController]
 [Route("api/[controller]")]
 public class TreatmentPlansController : ControllerBase
 {
     private readonly ClinicDbContext _dbContext;
 
+    /// <summary>Initializes a new instance of <see cref="TreatmentPlansController"/>.</summary>
     public TreatmentPlansController(ClinicDbContext dbContext)
     {
         _dbContext = dbContext;
     }
 
+    /// <summary>Returns all treatment plans with their associated therapies.</summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<TreatmentPlanDto>>> GetAll(CancellationToken ct)
     {
@@ -32,6 +35,7 @@ public class TreatmentPlansController : ControllerBase
         return Ok(plans.Select(static x => MapToDto(x)).ToList());
     }
 
+    /// <summary>Returns a single treatment plan by ID.</summary>
     [HttpGet("{id:int}")]
     public async Task<ActionResult<TreatmentPlanDto>> GetById(int id, CancellationToken ct)
     {
@@ -46,6 +50,7 @@ public class TreatmentPlansController : ControllerBase
         return plan is null ? NotFound() : Ok(MapToDto(plan));
     }
 
+    /// <summary>Creates a new treatment plan and associates it with the specified therapy types.</summary>
     [HttpPost]
     public async Task<ActionResult<TreatmentPlanDto>> Create(CreateTreatmentPlanRequest request, CancellationToken ct)
     {
@@ -82,11 +87,15 @@ public class TreatmentPlansController : ControllerBase
             .Include(x => x.Therapist)
             .Include(x => x.TreatmentPlanTherapies)
                 .ThenInclude(x => x.TherapyType)
-            .FirstAsync(x => x.Id == plan.Id, ct);
+            .FirstOrDefaultAsync(x => x.Id == plan.Id, ct);
+
+        if (created is null)
+            return StatusCode(500, "Treatment plan was created but could not be retrieved.");
 
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
     }
 
+    /// <summary>Updates an existing treatment plan's schedule, therapist, and therapy types.</summary>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, UpdateTreatmentPlanRequest request, CancellationToken ct)
     {
@@ -138,6 +147,7 @@ public class TreatmentPlansController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Deletes a treatment plan and its therapy associations.</summary>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
@@ -157,9 +167,9 @@ public class TreatmentPlansController : ControllerBase
     {
         Id = plan.Id,
         PatientId = plan.PatientId,
-        PatientName = plan.Patient.FullName,
+        PatientName = plan.Patient?.FullName ?? "(unknown)",
         TherapistId = plan.TherapistId,
-        TherapistName = plan.Therapist.FullName,
+        TherapistName = plan.Therapist?.FullName ?? "(unknown)",
         FrequencyPerWeek = plan.FrequencyPerWeek,
         TotalDays = plan.TotalDays,
         StartDate = plan.StartDate,
@@ -169,9 +179,9 @@ public class TreatmentPlansController : ControllerBase
             .Select(x => new TreatmentPlanTherapyDto
             {
                 TherapyTypeId = x.TherapyTypeId,
-                TherapyTypeName = x.TherapyType.Name,
-                Specialty = x.TherapyType.Specialty,
-                ColorCode = x.TherapyType.ColorCode
+                TherapyTypeName = x.TherapyType?.Name ?? "(unknown)",
+                Specialty = x.TherapyType?.Specialty ?? string.Empty,
+                ColorCode = x.TherapyType?.ColorCode
             })
             .ToList(),
         CreatedAt = plan.CreatedAt,

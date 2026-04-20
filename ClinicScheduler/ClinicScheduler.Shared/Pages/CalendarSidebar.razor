@@ -1,5 +1,10 @@
-@using ClinicScheduler.Shared.Services
-@inject ClinicDataStore Data
+@using Microsoft.AspNetCore.Identity
+@inject IDbContextFactory<ClinicDbContext> DbFactory
+@inject AppointmentSchedulingService SchedulingService
+@inject IRepository<Room> RoomRepo
+@inject IRepository<Therapist> TherapistRepo
+@inject ISnackbar Snackbar
+@inject UserManager<AppUser> UserManager
 
 <div class="calendar-sidebar">
     <div class="mini-month">
@@ -36,41 +41,91 @@
     <div class="sidebar-lists">
         @if (ViewerRole == "staff")
         {
-            var pending = PendingRequests;
             <section class="sidebar-section">
                 <h4 class="sidebar-heading sidebar-heading-requests">
                     Pending Requests
-                    @if (pending.Count > 0)
+                    @if (_pendingRequests.Count > 0)
                     {
-                        <span class="sidebar-pending-badge">@pending.Count</span>
+                        <span class="sidebar-pending-badge">@_pendingRequests.Count</span>
                     }
                 </h4>
-                @if (pending.Count == 0)
+                @if (_pendingRequests.Count == 0)
                 {
                     <p class="sidebar-empty">No pending requests.</p>
                 }
                 else
                 {
                     <ul class="sidebar-ul">
-                        @foreach (var a in pending)
+                        @foreach (var r in _pendingRequests)
                         {
-                            var patient = Data.GetPatient(a.PatientId);
-                            var doctor  = MockClinicData.Doctors.FirstOrDefault(d => d.Id == a.DoctorId);
                             <li>
                                 <div class="sidebar-req-card">
                                     <div class="sidebar-req-meta">
-                                        <span class="sidebar-req-patient">@(patient?.Name ?? "Unknown patient")</span>
-                                        <span class="sidebar-req-detail">@a.Start.ToString("MMM d") · @FormatRange(a)</span>
-                                        <span class="sidebar-req-detail">@(doctor?.Name ?? "Unknown doctor")</span>
-                                        @if (!string.IsNullOrWhiteSpace(a.MeetingNotes))
+                                        <span class="sidebar-req-patient">@(r.Patient?.FullName ?? "Unknown patient")</span>
+                                        <span class="sidebar-req-detail">@r.PreferredDateTime.ToString("MMM d") · @r.PreferredDateTime.ToString("h:mm tt")</span>
+                                        <span class="sidebar-req-detail">@(r.PreferredTherapist?.FullName ?? "No preference")</span>
+                                        @if (!string.IsNullOrWhiteSpace(r.Notes))
                                         {
-                                            <span class="sidebar-req-reason">@a.MeetingNotes</span>
+                                            <span class="sidebar-req-reason">@r.Notes</span>
                                         }
                                     </div>
                                     <div class="sidebar-req-actions">
-                                        <button type="button" class="sidebar-req-confirm" @onclick="() => ConfirmRequest(a)">Confirm</button>
-                                        <button type="button" class="sidebar-req-decline" @onclick="() => DeclineRequest(a)">Decline</button>
+                                        <button type="button" class="sidebar-req-confirm" @onclick="() => ConfirmRequest(r)">Confirm</button>
+                                        <button type="button" class="sidebar-req-decline" @onclick="() => DeclineRequest(r)">Decline</button>
                                     </div>
+                                </div>
+                            </li>
+                        }
+                    </ul>
+                }
+            </section>
+
+            <section class="sidebar-section">
+                <h4 class="sidebar-heading sidebar-heading-requests">
+                    Pending Cancellations
+                    @if (_pendingCancellations.Count > 0)
+                    {
+                        <span class="sidebar-pending-badge">@_pendingCancellations.Count</span>
+                    }
+                </h4>
+                @if (_pendingCancellations.Count == 0)
+                {
+                    <p class="sidebar-empty">No pending cancellations.</p>
+                }
+                else
+                {
+                    <ul class="sidebar-ul">
+                        @foreach (var cr in _pendingCancellations)
+                        {
+                            <li>
+                                <div class="sidebar-req-card">
+                                    <div class="sidebar-req-meta">
+                                        <span class="sidebar-req-patient">@(cr.Patient?.FullName ?? "Unknown patient")</span>
+                                        <span class="sidebar-req-detail">@cr.Appointment.StartTime.ToString("MMM d") · @cr.Appointment.StartTime.ToString("h:mm tt")</span>
+                                        <span class="sidebar-req-detail">@(cr.Appointment.Therapist?.FullName ?? "Unknown therapist")</span>
+                                        @if (!string.IsNullOrWhiteSpace(cr.Reason))
+                                        {
+                                            <span class="sidebar-req-reason">@cr.Reason</span>
+                                        }
+                                    </div>
+                                    @if (_denyingCancellationId == cr.Id)
+                                    {
+                                        <div class="sidebar-cancel-deny-form">
+                                            <input type="text" class="sidebar-cancel-deny-input" placeholder="Denial reason…"
+                                                   @bind="_denyReason" />
+                                            <div class="sidebar-req-actions">
+                                                <button type="button" class="sidebar-req-decline" @onclick="() => ConfirmDenyCancellation(cr)">Confirm Deny</button>
+                                                <button type="button" class="sidebar-req-decline" @onclick="CancelDeny">Cancel</button>
+                                            </div>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <div class="sidebar-req-actions">
+                                            <button type="button" class="sidebar-req-confirm" @onclick="() => ApproveCancellation(cr)">Approve</button>
+                                            <button type="button" class="sidebar-req-decline" @onclick="() => StartDenyCancellation(cr)">Deny</button>
+                                        </div>
+                                    }
                                 </div>
                             </li>
                         }
@@ -81,20 +136,20 @@
 
         <section class="sidebar-section">
             <h4 class="sidebar-heading">Recent</h4>
-            @if (RecentAppointments.Count == 0)
+            @if (_recentAppointments.Count == 0)
             {
                 <p class="sidebar-empty">No past appointments.</p>
             }
             else
             {
                 <ul class="sidebar-ul">
-                    @foreach (var a in RecentAppointments)
+                    @foreach (var a in _recentAppointments)
                     {
                         <li>
                             <button type="button" class="sidebar-appt @(SelectedId == a.Id ? "active" : "")"
                                     @onclick="() => OnAppointmentSelected.InvokeAsync(a)">
-                                <span class="sidebar-appt-title">@a.Title</span>
-                                <span class="sidebar-appt-when">@a.Start.ToString("MMM d") · @FormatRange(a)</span>
+                                <span class="sidebar-appt-title">@(a.TherapyType?.Name ?? a.Status.ToString())</span>
+                                <span class="sidebar-appt-when">@a.StartTime.ToString("MMM d") · @FormatRange(a)</span>
                                 <span class="sidebar-appt-sub">@Subtitle(a)</span>
                             </button>
                         </li>
@@ -105,20 +160,20 @@
 
         <section class="sidebar-section">
             <h4 class="sidebar-heading">Upcoming</h4>
-            @if (UpcomingAppointments.Count == 0)
+            @if (_upcomingAppointments.Count == 0)
             {
                 <p class="sidebar-empty">Nothing scheduled ahead.</p>
             }
             else
             {
                 <ul class="sidebar-ul">
-                    @foreach (var a in UpcomingAppointments)
+                    @foreach (var a in _upcomingAppointments)
                     {
                         <li>
                             <button type="button" class="sidebar-appt @(SelectedId == a.Id ? "active" : "")"
                                     @onclick="() => OnAppointmentSelected.InvokeAsync(a)">
-                                <span class="sidebar-appt-title">@a.Title</span>
-                                <span class="sidebar-appt-when">@a.Start.ToString("MMM d") · @FormatRange(a)</span>
+                                <span class="sidebar-appt-title">@(a.TherapyType?.Name ?? a.Status.ToString())</span>
+                                <span class="sidebar-appt-when">@a.StartTime.ToString("MMM d") · @FormatRange(a)</span>
                                 <span class="sidebar-appt-sub">@Subtitle(a)</span>
                             </button>
                         </li>
@@ -129,20 +184,20 @@
 
         <section class="sidebar-section">
             <h4 class="sidebar-heading">Follow-ups</h4>
-            @if (FollowUpAppointments.Count == 0)
+            @if (_followUpAppointments.Count == 0)
             {
                 <p class="sidebar-empty">No follow-up visits on file.</p>
             }
             else
             {
                 <ul class="sidebar-ul">
-                    @foreach (var a in FollowUpAppointments)
+                    @foreach (var a in _followUpAppointments)
                     {
                         <li>
                             <button type="button" class="sidebar-appt @(SelectedId == a.Id ? "active" : "")"
                                     @onclick="() => OnAppointmentSelected.InvokeAsync(a)">
-                                <span class="sidebar-appt-title">@a.Title</span>
-                                <span class="sidebar-appt-when">@a.Start.ToString("MMM d") · @FormatRange(a)</span>
+                                <span class="sidebar-appt-title">@(a.TherapyType?.Name ?? a.Status.ToString())</span>
+                                <span class="sidebar-appt-when">@a.StartTime.ToString("MMM d") · @FormatRange(a)</span>
                                 <span class="sidebar-appt-sub">@Subtitle(a)</span>
                             </button>
                         </li>
@@ -155,23 +210,33 @@
 
 @code {
     [Parameter] public string ViewerRole { get; set; } = "staff";
-    [Parameter] public string? PatientId { get; set; }
-    [Parameter] public string? DoctorId { get; set; }
+    [Parameter] public int? PatientId { get; set; }
+    [Parameter] public int? TherapistId { get; set; }
     [Parameter] public DateTime WeekStart { get; set; }
     [Parameter] public DateTime FocusedDate { get; set; }
-    [Parameter] public string? SelectedId { get; set; }
+    [Parameter] public int? SelectedId { get; set; }
     [Parameter] public EventCallback<DateTime> OnDateSelected { get; set; }
-    [Parameter] public EventCallback<MockClinicData.Appointment> OnAppointmentSelected { get; set; }
+    [Parameter] public EventCallback<Appointment> OnAppointmentSelected { get; set; }
     [Parameter] public EventCallback OnAppointmentStatusChanged { get; set; }
 
     private DateTime _currentMonth;
+    private List<Appointment> _recentAppointments = new();
+    private List<Appointment> _upcomingAppointments = new();
+    private List<Appointment> _followUpAppointments = new();
+    private List<AppointmentRequest> _pendingRequests = new();
+    private List<CancelAppointmentRequest> _pendingCancellations = new();
+    private int? _denyingCancellationId;
+    private string _denyReason = "";
 
     private readonly string[] _dayLabels = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
     private DateTime _miniGridStart => MiniGridStart(_currentMonth);
 
-    protected override void OnInitialized() =>
+    protected override async Task OnInitializedAsync()
+    {
         _currentMonth = new DateTime(WeekStart.Year, WeekStart.Month, 1);
+        await LoadSidebarDataAsync();
+    }
 
     protected override void OnParametersSet()
     {
@@ -190,63 +255,225 @@
         OnDateSelected.InvokeAsync(date);
     }
 
-    private IEnumerable<MockClinicData.Appointment> ForViewer()
+    private async Task LoadSidebarDataAsync()
     {
-        IEnumerable<MockClinicData.Appointment> q = Data.Appointments;
-        return ViewerRole switch
+        await using var db = await DbFactory.CreateDbContextAsync();
+        await LoadSidebarAppointmentsAsync(db);
+
+        if (ViewerRole == "staff")
         {
-            "patient" when !string.IsNullOrWhiteSpace(PatientId) => q.Where(a => a.PatientId == PatientId),
-            "doctor"  when !string.IsNullOrWhiteSpace(DoctorId)  => q.Where(a => a.DoctorId  == DoctorId),
-            "staff"                                               => q,
-            _                                                     => Enumerable.Empty<MockClinicData.Appointment>()
-        };
+            _pendingRequests = await db.AppointmentRequests
+                .Include(r => r.Patient)
+                .Include(r => r.PreferredTherapist)
+                .Where(r => r.Status == AppointmentRequestStatus.Pending)
+                .OrderBy(r => r.PreferredDateTime)
+                .ToListAsync();
+
+            _pendingCancellations = await db.CancelAppointmentRequests
+                .Include(cr => cr.Patient)
+                .Include(cr => cr.Appointment)
+                    .ThenInclude(a => a.Therapist)
+                .Where(cr => cr.Status == AppointmentRequestStatus.Pending)
+                .OrderBy(cr => cr.CreatedAt)
+                .ToListAsync();
+        }
     }
 
-    private List<MockClinicData.Appointment> PendingRequests =>
-        ViewerRole == "staff"
-            ? Data.Appointments.Where(a => a.Status == "pending").OrderBy(a => a.Start).ToList()
-            : [];
-
-    private async Task ConfirmRequest(MockClinicData.Appointment a)
+    private async Task LoadSidebarAppointmentsAsync(ClinicDbContext db)
     {
-        Data.UpdateAppointmentStatus(a.Id, "confirmed");
+        var now = DateTime.UtcNow;
+
+        _recentAppointments = await BuildViewerQuery(db)
+            .Where(a => a.EndTime < now)
+            .OrderByDescending(a => a.StartTime)
+            .Take(5)
+            .ToListAsync();
+
+        _upcomingAppointments = await BuildViewerQuery(db)
+            .Where(a => a.StartTime > now)
+            .OrderBy(a => a.StartTime)
+            .Take(5)
+            .ToListAsync();
+
+        _followUpAppointments = await BuildViewerQuery(db)
+            .Where(a => a.TherapyType != null
+                && a.TherapyType.Name.Contains("follow")
+                && a.StartTime > now)
+            .OrderBy(a => a.StartTime)
+            .Take(5)
+            .ToListAsync();
+    }
+
+    private IQueryable<Appointment> BuildViewerQuery(ClinicDbContext db)
+    {
+        var query = db.Appointments
+            .Include(a => a.Patient)
+            .Include(a => a.Therapist)
+            .Include(a => a.Room)
+            .Include(a => a.TherapyType)
+            .AsQueryable();
+
+        if (ViewerRole == "patient" && PatientId.HasValue)
+            query = query.Where(a => a.PatientId == PatientId.Value);
+        else if (ViewerRole == "doctor" && TherapistId.HasValue)
+            query = query.Where(a => a.TherapistId == TherapistId.Value);
+
+        return query;
+    }
+
+    private async Task ConfirmRequest(AppointmentRequest request)
+    {
+        try
+        {
+            // Use the preferred therapist, or fall back to the first available therapist
+            var therapistId = request.PreferredTherapistId
+                ?? (await TherapistRepo.GetAllAsync()).FirstOrDefault()?.Id
+                ?? 0;
+
+            // Use the first available room
+            var roomId = (await RoomRepo.GetAllAsync()).FirstOrDefault()?.Id ?? 0;
+
+            var appt = await SchedulingService.CreateAppointmentAsync(
+                request.PatientId,
+                therapistId,
+                roomId,
+                request.PreferredDateTime,
+                TimeSpan.FromMinutes(30));
+
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var tracked = await db.AppointmentRequests.FindAsync(request.Id);
+            tracked!.Approve(appt);
+            await db.SaveChangesAsync();
+
+            _pendingRequests.Remove(request);
+            Snackbar.Add("Request approved and appointment booked.", Severity.Success);
+            await OnAppointmentStatusChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not approve request: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task DeclineRequest(AppointmentRequest request)
+    {
+        await using var db = await DbFactory.CreateDbContextAsync();
+        var tracked = await db.AppointmentRequests.FindAsync(request.Id);
+        if (tracked is null) return;
+        tracked.Deny();
+        await db.SaveChangesAsync();
+
+        _pendingRequests.Remove(request);
+        Snackbar.Add("Request declined.", Severity.Info);
         await OnAppointmentStatusChanged.InvokeAsync();
     }
 
-    private async Task DeclineRequest(MockClinicData.Appointment a)
+    private async Task ApproveCancellation(CancelAppointmentRequest cancelRequest)
     {
-        Data.UpdateAppointmentStatus(a.Id, "declined");
-        await OnAppointmentStatusChanged.InvokeAsync();
-    }
-
-    private List<MockClinicData.Appointment> RecentAppointments =>
-        ForViewer().Where(a => a.End < DateTime.Now && a.Status != "pending").OrderByDescending(a => a.Start).Take(5).ToList();
-
-    private List<MockClinicData.Appointment> UpcomingAppointments =>
-        ForViewer().Where(a => a.Start > DateTime.Now && a.Status != "pending").OrderBy(a => a.Start).Take(5).ToList();
-
-    private List<MockClinicData.Appointment> FollowUpAppointments =>
-        ForViewer()
-            .Where(a => a.Title.Contains("follow", StringComparison.OrdinalIgnoreCase) && a.Start > DateTime.Now && a.Status != "pending")
-            .OrderBy(a => a.Start).Take(5).ToList();
-
-    private string Subtitle(MockClinicData.Appointment a)
-    {
-        var patient = Data.GetPatient(a.PatientId)
-            ?? new MockClinicData.Patient("?", "Unknown", DateTime.Today, "", "", "", "");
-        var doctor = MockClinicData.Doctors.FirstOrDefault(d => d.Id == a.DoctorId)
-            ?? new MockClinicData.Doctor("?", "Unknown", "");
-        return ViewerRole switch
+        try
         {
-            "patient" => doctor.Name,
-            "doctor"  => patient.Name,
-            "staff"   => $"{patient.Name} · {doctor.Name}",
-            _         => ""
-        };
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var tracked = await db.CancelAppointmentRequests
+                .Include(cr => cr.Appointment)
+                .Include(cr => cr.Patient)
+                .FirstOrDefaultAsync(cr => cr.Id == cancelRequest.Id);
+
+            if (tracked is null) return;
+
+            tracked.Approve();
+
+            // Look up the patient's AppUser by matching email
+            var patientUser = await db.Users.FirstOrDefaultAsync(u => u.Email == tracked.Patient.Email);
+            if (patientUser is not null)
+            {
+                db.Notifications.Add(new Notification(
+                    patientUser.Id,
+                    NotificationType.CancellationApproved,
+                    "Cancellation Approved",
+                    $"Your cancellation request for the appointment on {tracked.Appointment.StartTime:MMM d, yyyy} at {tracked.Appointment.StartTime:h:mm tt} has been approved.",
+                    tracked.AppointmentId));
+            }
+
+            await db.SaveChangesAsync();
+
+            _pendingCancellations.Remove(cancelRequest);
+            Snackbar.Add("Cancellation approved and appointment canceled.", Severity.Success);
+            await OnAppointmentStatusChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not approve cancellation: {ex.Message}", Severity.Error);
+        }
     }
 
-    private static string FormatRange(MockClinicData.Appointment a) =>
-        $"{a.Start:h:mm tt} – {a.End:h:mm tt}";
+    private void StartDenyCancellation(CancelAppointmentRequest cancelRequest)
+    {
+        _denyingCancellationId = cancelRequest.Id;
+        _denyReason = "";
+    }
+
+    private void CancelDeny()
+    {
+        _denyingCancellationId = null;
+        _denyReason = "";
+    }
+
+    private async Task ConfirmDenyCancellation(CancelAppointmentRequest cancelRequest)
+    {
+        if (string.IsNullOrWhiteSpace(_denyReason))
+        {
+            Snackbar.Add("Please provide a denial reason.", Severity.Warning);
+            return;
+        }
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+            var tracked = await db.CancelAppointmentRequests
+                .Include(cr => cr.Patient)
+                .Include(cr => cr.Appointment)
+                .FirstOrDefaultAsync(cr => cr.Id == cancelRequest.Id);
+
+            if (tracked is null) return;
+
+            tracked.Deny(_denyReason.Trim());
+
+            // Look up the patient's AppUser by matching email
+            var patientUser = await db.Users.FirstOrDefaultAsync(u => u.Email == tracked.Patient.Email);
+            if (patientUser is not null)
+            {
+                db.Notifications.Add(new Notification(
+                    patientUser.Id,
+                    NotificationType.CancellationDenied,
+                    "Cancellation Denied",
+                    $"Your cancellation request for the appointment on {tracked.Appointment.StartTime:MMM d, yyyy} at {tracked.Appointment.StartTime:h:mm tt} has been denied. Reason: {_denyReason.Trim()}",
+                    tracked.AppointmentId));
+            }
+
+            await db.SaveChangesAsync();
+
+            _pendingCancellations.Remove(cancelRequest);
+            _denyingCancellationId = null;
+            _denyReason = "";
+            Snackbar.Add("Cancellation request denied.", Severity.Info);
+            await OnAppointmentStatusChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Could not deny cancellation: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string Subtitle(Appointment a) => ViewerRole switch
+    {
+        "patient" => a.Therapist?.FullName ?? "Unknown",
+        "doctor" => a.Patient?.FullName ?? "Unknown",
+        "staff" => $"{a.Patient?.FullName ?? "Unknown"} · {a.Therapist?.FullName ?? "Unknown"}",
+        _ => ""
+    };
+
+    private static string FormatRange(Appointment a) =>
+        $"{a.StartTime:h:mm tt} – {a.EndTime:h:mm tt}";
 
     private static DateTime MiniGridStart(DateTime month)
     {

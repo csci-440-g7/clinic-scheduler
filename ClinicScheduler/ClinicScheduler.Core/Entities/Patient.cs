@@ -12,6 +12,7 @@ public class Patient
     public string Email { get; private set; }
     public string? Phone { get; private set; }
     public DateOnly DateOfBirth { get; private set; }
+    public string? Notes { get; private set; }
 
     public string FullName => $"{FirstName} {LastName}";
     
@@ -52,6 +53,12 @@ public class Patient
         FirstName = firstName;
         LastName = lastName;
         DateOfBirth = dateOfBirth;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    public void UpdateNotes(string? notes)
+    {
+        Notes = notes;
         UpdatedAt = DateTime.UtcNow;
     }
 }

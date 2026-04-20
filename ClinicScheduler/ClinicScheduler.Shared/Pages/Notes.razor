@@ -1,19 +1,160 @@
 @page "/notes"
+@using ClinicScheduler.Shared.Pages
+@inject ClinicDbContext DbContext
 
-<h1>Clinical notes</h1>
+<div class="notes-shell">
+    <h1>Clinical Notes</h1>
 
-<input placeholder="Search phrase or date" class="search-box" />
+    @if (_isLoading)
+    {
+        <div class="notes-loading">
+            <MudProgressCircular Indeterminate="true" Size="Size.Medium" />
+            <span>Loading notes…</span>
+        </div>
+    }
+    else if (_hasError)
+    {
+        <p class="notes-error">Unable to load clinical notes. Please try again later.</p>
+    }
+    else if (_appointments.Count == 0)
+    {
+        <p class="notes-empty">No clinical notes are available.</p>
+    }
+    else
+    {
+        <div class="notes-search">
+            <input type="text"
+                   placeholder="Search by note text, patient, or therapist…"
+                   class="notes-search-box"
+                   @bind="_searchText"
+                   @bind:event="oninput" />
+        </div>
 
-<h3>@DateTime.Today.Year</h3>
-<ul class="note-list">
-    <li>Mar 1 — Follow-up: spinal cord stimulator trial</li>
-    <li>Feb 15 — Opioid stewardship check-in</li>
-    <li>Feb 10 — Initial pain consult</li>
-</ul>
+        <div class="notes-layout">
+            @* Left column: note list *@
+            <div class="notes-list-panel">
+                @if (!FilteredNotes.Any())
+                {
+                    <p class="notes-empty">No notes match the search criteria.</p>
+                }
+                else
+                {
+                    @foreach (var yearGroup in GroupedByYear)
+                    {
+                        <h3 class="notes-year-heading">@yearGroup.Key</h3>
+                        <ul class="notes-list">
+                            @foreach (var appointment in yearGroup)
+                            {
+                                <li class="@GetNoteEntryClass(appointment)"
+                                    @onclick="() => SelectNote(appointment)">
+                                    <div class="notes-entry-header">
+                                        <span class="notes-entry-date">@NotesPageHelpers.FormatListEntryDate(appointment.StartTime)</span>
+                                        <span class="notes-entry-patient">@(appointment.Patient?.FullName ?? "Unknown Patient")</span>
+                                    </div>
+                                    <div class="notes-entry-preview">
+                                        @NotesPageHelpers.TruncateNoteText(appointment.Notes ?? "", 80)
+                                    </div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                }
+            </div>
 
-<div class="note-preview">
-    <h4>Selected note</h4>
-    <p>Patient: Elena Vargas</p>
-    <p>Date: Mar 1</p>
-    <p>"Radicular symptoms improved. Continue multimodal plan; discussed injection options."</p>
+            @* Right column: note preview *@
+            <div class="notes-preview-panel">
+                @if (_selectedAppointment is null)
+                {
+                    <p class="notes-preview-placeholder">Select a note to view details</p>
+                }
+                else
+                {
+                    <div class="notes-preview-content">
+                        <h3>Note Details</h3>
+                        <div class="notes-preview-meta">
+                            <p><strong>Patient:</strong> @(_selectedAppointment.Patient?.FullName ?? "Unknown Patient")</p>
+                            <p><strong>Therapist:</strong> @(_selectedAppointment.Therapist?.FullName ?? "Unknown Therapist")</p>
+                            <p><strong>Date:</strong> @NotesPageHelpers.FormatPreviewDate(_selectedAppointment.StartTime)</p>
+                        </div>
+                        <div class="notes-preview-text">
+                            @(_selectedAppointment.Notes ?? "")
+                        </div>
+                    </div>
+                }
+            </div>
+        </div>
+    }
 </div>
+
+@code {
+    private List<Appointment> _appointments = new();
+    private string _searchText = "";
+    private Appointment? _selectedAppointment;
+    private bool _isLoading;
+    private bool _hasError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isLoading = true;
+
+        try
+        {
+            _appointments = await DbContext.Appointments
+                .Include(a => a.Patient)
+                .Include(a => a.Therapist)
+                .Where(a => a.Notes != null)
+                .OrderByDescending(a => a.StartTime)
+                .ToListAsync();
+        }
+        catch
+        {
+            _hasError = true;
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private IEnumerable<Appointment> FilteredNotes =>
+        NotesPageHelpers.FilterNotes(_appointments, _searchText);
+
+    private IEnumerable<IGrouping<int, Appointment>> GroupedByYear =>
+        NotesPageHelpers.GroupByYearDescending(FilteredNotes);
+
+    private void SelectNote(Appointment appointment)
+    {
+        _selectedAppointment = appointment;
+    }
+
+    private string GetNoteEntryClass(Appointment appointment) =>
+        appointment == _selectedAppointment ? "notes-entry active" : "notes-entry";
+}
+
+<style>
+    .notes-shell { max-width: 1200px; margin: 0 auto; padding: 16px; }
+    .notes-loading { display: flex; align-items: center; gap: 12px; padding: 24px 0; color: #6b7280; }
+    .notes-error { color: #dc2626; padding: 16px; background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; }
+    .notes-empty { color: #6b7280; padding: 16px 0; }
+    .notes-search { margin-bottom: 16px; }
+    .notes-search-box { width: 100%; padding: 10px 14px; border: 1px solid #d1d5db; border-radius: 8px; font: inherit; box-sizing: border-box; }
+    .notes-search-box:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 2px rgba(59,130,246,0.15); }
+    .notes-layout { display: flex; gap: 24px; align-items: flex-start; }
+    .notes-list-panel { flex: 1; min-width: 0; max-height: 70vh; overflow-y: auto; }
+    .notes-preview-panel { flex: 1; min-width: 0; border: 1px solid #e5e7eb; border-radius: 10px; padding: 20px; background: #fff; position: sticky; top: 16px; }
+    .notes-year-heading { margin: 16px 0 8px; font-size: 15px; font-weight: 800; color: #111827; }
+    .notes-year-heading:first-child { margin-top: 0; }
+    .notes-list { list-style: none; padding: 0; margin: 0 0 12px 0; display: flex; flex-direction: column; gap: 6px; }
+    .notes-entry { border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px 14px; background: #fafafa; cursor: pointer; transition: border-color 0.15s, background 0.15s; }
+    .notes-entry:hover { border-color: #93c5fd; background: #f0f7ff; }
+    .notes-entry.active { border-color: #3b82f6; background: #eff6ff; }
+    .notes-entry-header { display: flex; gap: 10px; align-items: center; font-size: 13px; }
+    .notes-entry-date { font-weight: 700; color: #374151; white-space: nowrap; }
+    .notes-entry-patient { color: #6b7280; }
+    .notes-entry-preview { margin-top: 4px; font-size: 13px; color: #6b7280; line-height: 1.4; }
+    .notes-preview-placeholder { color: #9ca3af; text-align: center; padding: 40px 16px; }
+    .notes-preview-content h3 { margin: 0 0 12px; font-size: 16px; color: #111827; }
+    .notes-preview-meta { margin-bottom: 16px; }
+    .notes-preview-meta p { margin: 4px 0; font-size: 14px; color: #374151; }
+    .notes-preview-text { white-space: pre-wrap; font-size: 14px; color: #1f2937; line-height: 1.6; padding: 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #e5e7eb; }
+</style>

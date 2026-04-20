@@ -5,17 +5,20 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicScheduler.Web.Api;
 
+/// <summary>Manages therapist resources.</summary>
 [ApiController]
 [Route("api/[controller]")]
 public class TherapistsController : ControllerBase
 {
     private readonly IRepository<Therapist> _repository;
 
+    /// <summary>Initializes a new instance of <see cref="TherapistsController"/>.</summary>
     public TherapistsController(IRepository<Therapist> repository)
     {
         _repository = repository;
     }
 
+    /// <summary>Returns all therapists.</summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<TherapistDto>>> GetAll(CancellationToken ct)
     {
@@ -23,6 +26,7 @@ public class TherapistsController : ControllerBase
         return Ok(therapists.Select(static t => MapToDto(t)).ToList());
     }
 
+    /// <summary>Returns a single therapist by ID.</summary>
     [HttpGet("{id:int}")]
     public async Task<ActionResult<TherapistDto>> GetById(int id, CancellationToken ct)
     {
@@ -30,6 +34,7 @@ public class TherapistsController : ControllerBase
         return therapist is null ? NotFound() : Ok(MapToDto(therapist));
     }
 
+    /// <summary>Creates a new therapist record.</summary>
     [HttpPost]
     public async Task<ActionResult<TherapistDto>> Create(CreateTherapistRequest request, CancellationToken ct)
     {
@@ -38,6 +43,7 @@ public class TherapistsController : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
     }
 
+    /// <summary>Updates a therapist's personal, contact, and specialty information.</summary>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, UpdateTherapistRequest request, CancellationToken ct)
     {
@@ -51,6 +57,7 @@ public class TherapistsController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Deletes a therapist record.</summary>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {

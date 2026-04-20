@@ -5,17 +5,20 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicScheduler.Web.Api;
 
+/// <summary>Manages therapy type resources.</summary>
 [ApiController]
 [Route("api/[controller]")]
 public class TherapyTypesController : ControllerBase
 {
     private readonly IRepository<TherapyType> _repository;
 
+    /// <summary>Initializes a new instance of <see cref="TherapyTypesController"/>.</summary>
     public TherapyTypesController(IRepository<TherapyType> repository)
     {
         _repository = repository;
     }
 
+    /// <summary>Returns all therapy types.</summary>
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<TherapyTypeDto>>> GetAll(CancellationToken ct)
     {
@@ -23,6 +26,7 @@ public class TherapyTypesController : ControllerBase
         return Ok(types.Select(static t => MapToDto(t)).ToList());
     }
 
+    /// <summary>Returns a single therapy type by ID.</summary>
     [HttpGet("{id:int}")]
     public async Task<ActionResult<TherapyTypeDto>> GetById(int id, CancellationToken ct)
     {
@@ -30,6 +34,7 @@ public class TherapyTypesController : ControllerBase
         return type is null ? NotFound() : Ok(MapToDto(type));
     }
 
+    /// <summary>Creates a new therapy type.</summary>
     [HttpPost]
     public async Task<ActionResult<TherapyTypeDto>> Create(CreateTherapyTypeRequest request, CancellationToken ct)
     {
@@ -45,6 +50,7 @@ public class TherapyTypesController : ControllerBase
         }
     }
 
+    /// <summary>Updates an existing therapy type.</summary>
     [HttpPut("{id:int}")]
     public async Task<IActionResult> Update(int id, UpdateTherapyTypeRequest request, CancellationToken ct)
     {
@@ -64,6 +70,7 @@ public class TherapyTypesController : ControllerBase
         return NoContent();
     }
 
+    /// <summary>Deletes a therapy type.</summary>
     [HttpDelete("{id:int}")]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {

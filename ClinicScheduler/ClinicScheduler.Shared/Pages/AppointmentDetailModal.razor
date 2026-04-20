@@ -1,5 +1,4 @@
-@using ClinicScheduler.Shared.Services
-@inject ClinicDataStore Data
+@inject ClinicDbContext DbContext
 
 <div class="appt-modal-root"
      @onclick="OnClose"
@@ -13,34 +12,23 @@
                 <button type="button" class="appt-detail-close" @onclick="OnClose" title="Close">×</button>
             </div>
             <div class="appt-detail-grid">
-                @if (Appointment.Status == "pending")
-                {
-                    <div class="appt-detail-row">
-                        <span class="k">Status</span>
-                        <span class="v appt-status-pending">Pending confirmation</span>
-                    </div>
-                }
                 <div class="appt-detail-row">
                     <span class="k">When</span>
-                    <span class="v">@Appointment.Start.ToString("dddd, MMM d, yyyy") · @FormatRange()</span>
+                    <span class="v">@Appointment.StartTime.ToString("dddd, MMM d, yyyy") · @FormatRange()</span>
                 </div>
                 <div class="appt-detail-row">
                     <span class="k">Patient</span>
-                    <span class="v">@(Data.GetPatient(Appointment.PatientId)?.Name ?? "Unknown")</span>
+                    <span class="v">@(Appointment.Patient?.FullName ?? "Unknown")</span>
                 </div>
                 <div class="appt-detail-row">
                     <span class="k">Doctor</span>
-                    <span class="v">@(MockClinicData.Doctors.FirstOrDefault(d => d.Id == Appointment.DoctorId)?.Name ?? "Unknown")</span>
+                    <span class="v">@(Appointment.Therapist?.FullName ?? "Unknown")</span>
                 </div>
                 @if (ViewerRole is "patient" or "doctor")
                 {
                     <div class="appt-detail-row">
-                        <span class="k">Location</span>
-                        <span class="v">@Appointment.Location</span>
-                    </div>
-                    <div class="appt-detail-row">
                         <span class="k">Room</span>
-                        <span class="v">@Appointment.RoomNumber</span>
+                        <span class="v">@(Appointment.Room?.Name ?? "—")</span>
                     </div>
                     @if (ViewerRole == "doctor")
                     {
@@ -52,7 +40,7 @@
                                       @bind="_editNotes"
                                       @bind:event="oninput"></textarea>
                             <div class="appt-detail-actions">
-                                <button type="button" class="appt-detail-save" @onclick="SaveNotes">Save notes</button>
+                                <button type="button" class="appt-detail-save" @onclick="SaveNotesAsync">Save notes</button>
                                 @if (!string.IsNullOrWhiteSpace(_savedMessage))
                                 {
                                     <span class="appt-detail-saved">@_savedMessage</span>
@@ -64,73 +52,85 @@
                     {
                         <div class="appt-detail-row appt-detail-notes">
                             <span class="k">Notes</span>
-                            <span class="v">@(string.IsNullOrWhiteSpace(Appointment.MeetingNotes) ? "—" : Appointment.MeetingNotes)</span>
+                            <span class="v">@(string.IsNullOrWhiteSpace(Appointment.Notes) ? "—" : Appointment.Notes)</span>
                         </div>
                     }
                 }
                 else
                 {
                     <p class="appt-detail-staff-hint">Staff scheduling view: patient and doctor are shown. Location, room, and clinical notes are visible to patients and care providers only.</p>
-                    @if (Appointment.Status == "pending")
-                    {
-                        <div class="appt-detail-actions">
-                            <button type="button" class="appt-detail-approve" @onclick="Approve">Confirm</button>
-                            <button type="button" class="appt-detail-decline" @onclick="Decline">Decline</button>
-                            @if (!string.IsNullOrWhiteSpace(_statusMessage))
-                            {
-                                <span class="appt-detail-saved">@_statusMessage</span>
-                            }
-                        </div>
-                    }
-                    else if (!string.IsNullOrWhiteSpace(_statusMessage))
-                    {
-                        <span class="appt-detail-saved">@_statusMessage</span>
-                    }
+                }
+
+                @if (ViewerRole == "patient" && Appointment.Status is AppointmentStatus.Scheduled or AppointmentStatus.Rescheduled)
+                {
+                    <div class="appt-cancel-section">
+                        @if (_hasPendingCancelRequest)
+                        {
+                            <span class="appt-cancel-pending">
+                                <span class="appt-cancel-pending-icon">⏳</span>
+                                Cancellation request pending
+                            </span>
+                        }
+                        else
+                        {
+                            <button type="button" class="appt-cancel-btn" @onclick="() => _showCancelForm = true">
+                                Request Cancellation
+                            </button>
+                        }
+                    </div>
                 }
             </div>
         </div>
     </div>
 </div>
 
+@if (_showCancelForm)
+{
+    <CancelRequestModal Appointment="Appointment"
+                        OnClose="() => _showCancelForm = false"
+                        OnRequested="OnCancelRequestedAsync" />
+}
+
 @code {
-    [Parameter, EditorRequired] public MockClinicData.Appointment Appointment { get; set; } = default!;
+    [Parameter, EditorRequired] public Appointment Appointment { get; set; } = default!;
     [Parameter] public string ViewerRole { get; set; } = "staff";
     [Parameter] public EventCallback OnClose { get; set; }
     [Parameter] public EventCallback OnStatusChanged { get; set; }
 
     private string _editNotes = "";
     private string? _savedMessage;
-    private string? _statusMessage;
+    private bool _showCancelForm;
+    private bool _hasPendingCancelRequest;
 
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
-        _editNotes = Appointment.MeetingNotes ?? "";
+        _editNotes = Appointment.Notes ?? "";
         _savedMessage = null;
-        _statusMessage = null;
+        _showCancelForm = false;
+        await CheckPendingCancelRequestAsync();
     }
 
-    private void SaveNotes()
+    private async Task CheckPendingCancelRequestAsync()
+    {
+        _hasPendingCancelRequest = await DbContext.CancelAppointmentRequests
+            .AnyAsync(r => r.AppointmentId == Appointment.Id && r.Status == AppointmentRequestStatus.Pending);
+    }
+
+    private async Task OnCancelRequestedAsync()
+    {
+        _showCancelForm = false;
+        await CheckPendingCancelRequestAsync();
+        await OnStatusChanged.InvokeAsync();
+    }
+
+    private async Task SaveNotesAsync()
     {
         if (ViewerRole != "doctor") return;
-        Data.UpdateAppointmentMeetingNotes(
-            Appointment.Id,
-            string.IsNullOrWhiteSpace(_editNotes) ? null : _editNotes.Trim());
+        Appointment.Notes = string.IsNullOrWhiteSpace(_editNotes) ? null : _editNotes.Trim();
+        await DbContext.SaveChangesAsync();
         _savedMessage = "Saved.";
-    }
-
-    private async Task Approve()
-    {
-        Data.UpdateAppointmentStatus(Appointment.Id, "confirmed");
-        _statusMessage = "Confirmed.";
         await OnStatusChanged.InvokeAsync();
     }
 
-    private async Task Decline()
-    {
-        Data.UpdateAppointmentStatus(Appointment.Id, "declined");
-        _statusMessage = "Declined.";
-        await OnStatusChanged.InvokeAsync();
-    }
-
-    private string FormatRange() => $"{Appointment.Start:h:mm tt} – {Appointment.End:h:mm tt}";
+    private string FormatRange() => $"{Appointment.StartTime:h:mm tt} – {Appointment.EndTime:h:mm tt}";
 }
