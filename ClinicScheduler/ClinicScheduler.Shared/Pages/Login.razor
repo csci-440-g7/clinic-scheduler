@@ -12,6 +12,7 @@
         }
 
         <form method="post" action="/account/login">
+            <AntiforgeryToken />
             <input type="hidden" name="returnUrl" value="@(ReturnUrl ?? "/")" />
 
             <div class="mb-4">

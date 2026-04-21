@@ -1,6 +1,7 @@
 using ClinicScheduler.Core.Entities;
 using ClinicScheduler.Core.Interfaces;
 using ClinicScheduler.Web.Contracts.Locations;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicScheduler.Web.Api;
@@ -8,6 +9,7 @@ namespace ClinicScheduler.Web.Api;
 /// <summary>Manages clinic location resources.</summary>
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class LocationsController : ControllerBase
 {
     private readonly IRepository<Location> _repository;
@@ -36,6 +38,7 @@ public class LocationsController : ControllerBase
 
     /// <summary>Creates a new clinic location.</summary>
     [HttpPost]
+    [Authorize(Roles = RoleNames.AdminOrManager)]
     public async Task<ActionResult<LocationDto>> Create(CreateLocationRequest request, CancellationToken ct)
     {
         var location = new Location(request.Name, request.Address);
@@ -48,6 +51,7 @@ public class LocationsController : ControllerBase
 
     /// <summary>Updates an existing location's details.</summary>
     [HttpPut("{id:int}")]
+    [Authorize(Roles = RoleNames.AdminOrManager)]
     public async Task<IActionResult> Update(int id, UpdateLocationRequest request, CancellationToken ct)
     {
         var existing = await _repository.GetByIdAsync(id, ct);
@@ -61,6 +65,7 @@ public class LocationsController : ControllerBase
 
     /// <summary>Deletes a clinic location.</summary>
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = RoleNames.AdminOrManager)]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         var location = await _repository.GetByIdAsync(id, ct);

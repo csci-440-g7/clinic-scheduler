@@ -12,7 +12,6 @@ public class AccountController(SignInManager<AppUser> signInManager) : Controlle
 {
     /// <summary>Signs in a user with email and password, then redirects to <paramref name="returnUrl"/>.</summary>
     [HttpPost("login")]
-    [IgnoreAntiforgeryToken]
     public async Task<IActionResult> Login(
         [FromForm] string email,
         [FromForm] string password,
@@ -32,7 +31,6 @@ public class AccountController(SignInManager<AppUser> signInManager) : Controlle
 
     /// <summary>Signs the current user out and redirects to the login page.</summary>
     [HttpPost("logout")]
-    [IgnoreAntiforgeryToken]
     public async Task<IActionResult> Logout()
     {
         await signInManager.SignOutAsync();

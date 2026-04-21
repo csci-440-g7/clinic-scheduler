@@ -33,7 +33,7 @@ public class TreatmentPlan
     public ICollection<TreatmentPlanTherapy> TreatmentPlanTherapies { get; set; } = [];
 
     private static readonly int[] ValidFrequencies = [2, 3, 4];
-    private static readonly int[] ValidDurations = [20, 30, 40, 50];
+    private static readonly int[] ValidDurations = [20, 30, 50];
 
     /// <summary>
     /// Private constructor for EF Core.
