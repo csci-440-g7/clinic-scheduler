@@ -1,5 +1,5 @@
 @using Microsoft.AspNetCore.Identity
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject AuthenticationStateProvider AuthState
 @inject ISnackbar Snackbar
 @inject UserManager<AppUser> UserManager
@@ -80,6 +80,7 @@
         }
 
         var email = user.Identity.Name;
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         var patient = await DbContext.Patients.FirstOrDefaultAsync(p => p.Email == email);
 
         if (patient is null)

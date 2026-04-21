@@ -1,6 +1,6 @@
 @page "/notifications"
 @attribute [Authorize]
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject AuthenticationStateProvider AuthStateProvider
 @inject NavigationManager Nav
 
@@ -162,7 +162,9 @@ else
         var unread = _notifications.Where(n => !n.IsRead).ToList();
         if (unread.Count > 0)
         {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             foreach (var n in unread) n.MarkRead();
+            DbContext.Notifications.UpdateRange(unread);
             await DbContext.SaveChangesAsync();
         }
     }
@@ -170,6 +172,7 @@ else
     private async Task LoadAsync()
     {
         _loading = true;
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         _notifications = await DbContext.Notifications
             .Where(n => n.UserId == _userId && !n.IsArchived)
             .OrderByDescending(n => n.CreatedAt)
@@ -181,16 +184,25 @@ else
 
     private async Task MarkAllReadAsync()
     {
-        var unread = _notifications.Where(n => !n.IsRead).ToList();
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
+        var unread = await DbContext.Notifications
+            .Where(n => n.UserId == _userId && !n.IsArchived && !n.IsRead)
+            .ToListAsync();
         foreach (var n in unread) n.MarkRead();
         await DbContext.SaveChangesAsync();
+        foreach (var n in _notifications.Where(n => !n.IsRead)) n.MarkRead();
         StateHasChanged();
     }
 
     private async Task ArchiveOneAsync(Notification notification)
     {
-        notification.Archive();
-        await DbContext.SaveChangesAsync();
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
+        var tracked = await DbContext.Notifications.FindAsync(notification.Id);
+        if (tracked is not null)
+        {
+            tracked.Archive();
+            await DbContext.SaveChangesAsync();
+        }
         _notifications.Remove(notification);
         _archivedCount++;
         StateHasChanged();
@@ -198,7 +210,11 @@ else
 
     private async Task ArchiveAllAsync()
     {
-        foreach (var n in _notifications) n.Archive();
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
+        var active = await DbContext.Notifications
+            .Where(n => n.UserId == _userId && !n.IsArchived)
+            .ToListAsync();
+        foreach (var n in active) n.Archive();
         await DbContext.SaveChangesAsync();
         _archivedCount += _notifications.Count;
         _notifications.Clear();
@@ -210,6 +226,7 @@ else
         _showArchived = !_showArchived;
         if (_showArchived)
         {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             _archivedNotifications = await DbContext.Notifications
                 .Where(n => n.UserId == _userId && n.IsArchived)
                 .OrderByDescending(n => n.CreatedAt)

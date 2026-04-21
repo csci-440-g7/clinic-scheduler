@@ -1,6 +1,6 @@
 @page "/patients"
 @attribute [Authorize(Roles = "Admin,ClinicManager,Staff,Therapist")]
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject ISnackbar Snackbar
 
 <div class="patients-shell">
@@ -143,10 +143,11 @@
 
     private async Task RefreshListAsync()
     {
+        await using var db = await DbFactory.CreateDbContextAsync();
         var t = _search.Trim();
         _filtered = string.IsNullOrWhiteSpace(t)
-            ? await DbContext.Patients.ToListAsync()
-            : await DbContext.Patients
+            ? await db.Patients.ToListAsync()
+            : await db.Patients
                 .Where(p => p.FirstName.Contains(t) || p.LastName.Contains(t))
                 .ToListAsync();
     }
@@ -195,8 +196,9 @@
                 DateOnly.FromDateTime(_fdob),
                 string.IsNullOrWhiteSpace(_fphone) ? null : _fphone.Trim());
 
-            DbContext.Patients.Add(patient);
-            await DbContext.SaveChangesAsync();
+            await using var db = await DbFactory.CreateDbContextAsync();
+            db.Patients.Add(patient);
+            await db.SaveChangesAsync();
             Snackbar.Add("Patient added.", Severity.Success);
             await RefreshListAsync();
             _showAddForm = false;

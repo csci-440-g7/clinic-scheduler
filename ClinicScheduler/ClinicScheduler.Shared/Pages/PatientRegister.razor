@@ -2,7 +2,7 @@
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @using Microsoft.AspNetCore.Identity
 @inject UserManager<AppUser> UserManager
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject NavigationManager Nav
 @inject ISnackbar Snackbar
 
@@ -116,6 +116,7 @@
             }
 
             // Create the Patient domain entity
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             var dob = DateOnly.FromDateTime(_dob.Value.Date);
             var patient = new Patient(_firstName.Trim(), _lastName.Trim(), _email.Trim(), dob,
                 string.IsNullOrWhiteSpace(_phone) ? null : _phone.Trim());

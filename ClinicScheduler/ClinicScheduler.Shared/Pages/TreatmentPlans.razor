@@ -1,6 +1,6 @@
 @page "/treatment-plans"
 @attribute [Authorize(Roles = "Admin,ClinicManager,Staff")]
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject IRepository<Patient> PatientRepo
 @inject IRepository<Therapist> TherapistRepo
 @inject IRepository<TherapyType> TherapyTypeRepo
@@ -182,6 +182,7 @@
     private async Task LoadPlansAsync()
     {
         _loading = true;
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         _plans = await DbContext.TreatmentPlans
             .Include(p => p.Patient)
             .Include(p => p.Therapist)
@@ -230,6 +231,7 @@
         }
         try
         {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             var startDate = DateOnly.FromDateTime(_formStartDate.Value.Date);
             var selectedTherapyTypeIds = _formTherapyTypeIds.ToHashSet();
 
@@ -296,6 +298,7 @@
     {
         try
         {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             var tracked = await DbContext.TreatmentPlans
                 .Include(p => p.TreatmentPlanTherapies)
                 .FirstOrDefaultAsync(p => p.Id == plan.Id);
@@ -318,6 +321,7 @@
     {
         try
         {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             var tracked = await DbContext.TreatmentPlans.FindAsync(plan.Id);
             if (tracked is null) return;
             tracked.Suspend();
@@ -335,6 +339,7 @@
     {
         try
         {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             var tracked = await DbContext.TreatmentPlans.FindAsync(plan.Id);
             if (tracked is null) return;
             tracked.End();
@@ -352,6 +357,7 @@
     {
         try
         {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             var tracked = await DbContext.TreatmentPlans.FindAsync(plan.Id);
             if (tracked is null) return;
             tracked.Reactivate();

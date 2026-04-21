@@ -1,5 +1,5 @@
 ﻿@inject AuthenticationStateProvider AuthState
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -148,6 +148,7 @@
 
         if (_isAuthenticated && _userId is not null)
         {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             _unreadCount = await DbContext.Notifications
                 .CountAsync(n => n.UserId == _userId && !n.IsRead && !n.IsArchived);
         }

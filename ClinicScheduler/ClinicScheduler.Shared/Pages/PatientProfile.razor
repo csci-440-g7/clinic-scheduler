@@ -1,6 +1,6 @@
 @page "/patients/{Id:int}/profile"
 @attribute [Authorize(Roles = "Admin,ClinicManager,Staff,Therapist")]
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
 
@@ -180,6 +180,7 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         _patient = await DbContext.Patients.FindAsync(Id);
         if (_patient is null)
         {
@@ -211,7 +212,10 @@ else
     private async Task SaveNotesAsync()
     {
         if (_patient is null) return;
-        _patient.UpdateNotes(_notes);
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
+        var tracked = await DbContext.Patients.FindAsync(_patient.Id);
+        if (tracked is null) return;
+        tracked.UpdateNotes(_notes);
         await DbContext.SaveChangesAsync();
         Snackbar.Add("Notes saved.", Severity.Success);
     }

@@ -1,4 +1,4 @@
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject IRepository<Therapist> TherapistRepo
 @inject AuthenticationStateProvider AuthState
 @inject ISnackbar Snackbar
@@ -94,6 +94,7 @@
         }
 
         var email = user.Identity.Name;
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         var patient = await DbContext.Patients.FirstOrDefaultAsync(p => p.Email == email);
 
         if (patient is null)
