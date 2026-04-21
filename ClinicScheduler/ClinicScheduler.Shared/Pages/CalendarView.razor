@@ -216,27 +216,34 @@
 
     private static string ApptCss(Appointment a)
     {
-        // Use TherapyType color code if available, otherwise fall back to status-based styling
-        if (a.TherapyType is not null)
-        {
-            // Map known therapy type names to CSS classes for backward compatibility
-            var name = a.TherapyType.Name.ToLowerInvariant();
-            if (name.Contains("medical") || name.Contains("therapy")) return "appt-medical";
-            if (name.Contains("lab")) return "appt-lab";
-            if (name.Contains("intake") || name.Contains("assessment")) return "appt-intake";
-            if (name.Contains("admin")) return "appt-admin";
-        }
+        // Always use a per-patient color so each patient is visually distinct on the calendar
+        return ""; // color is applied via inline style in ApptStyle
+    }
 
-        // Fall back to status-based styling
-        return a.Status switch
-        {
-            AppointmentStatus.Scheduled => "appt-medical",
-            AppointmentStatus.Completed => "appt-lab",
-            AppointmentStatus.Canceled => "appt-admin",
-            AppointmentStatus.Missed => "appt-intake",
-            AppointmentStatus.Rescheduled => "appt-default",
-            _ => "appt-default"
-        };
+    /// <summary>
+    /// Deterministic color palette for per-patient coloring.
+    /// Each patient gets a consistent color based on their ID.
+    /// </summary>
+    private static readonly string[] PatientColors =
+    [
+        "#2563eb", // blue
+        "#16a34a", // green
+        "#f97316", // orange
+        "#6d28d9", // purple
+        "#dc2626", // red
+        "#0891b2", // cyan
+        "#c026d3", // fuchsia
+        "#ca8a04", // amber
+        "#4f46e5", // indigo
+        "#059669", // emerald
+        "#e11d48", // rose
+        "#7c3aed", // violet
+    ];
+
+    private static string GetPatientColor(Appointment a)
+    {
+        var index = Math.Abs(a.PatientId) % PatientColors.Length;
+        return PatientColors[index];
     }
 
     private static string FormatHour(int h) => DateTime.Today.AddHours(h).ToString("h:mm tt");
@@ -250,6 +257,7 @@
         var visEnd = Math.Min(endMin, EndHour * 60);
         var top = (visStart - StartHour * 60) / 60d * HourHeightPx;
         var height = Math.Max((visEnd - visStart) / 60d * HourHeightPx, 18);
-        return $"top:{top:0}px; height:{height:0}px;";
+        var bgColor = GetPatientColor(a);
+        return $"top:{top:0}px; height:{height:0}px; background:{bgColor};";
     }
 }
