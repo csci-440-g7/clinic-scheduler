@@ -25,28 +25,28 @@ Implement a request-based cancellation workflow for appointments. Patients submi
     - Foreign keys to `Patients` and `Appointments`
     - _Requirements: 6.1, 6.4_
 
-- [ ] 2. Property-based tests for CancelAppointmentRequest entity
-  - [ ]* 2.1 Write property test: Cancel request creation preserves all input fields
+- [x] 2. Property-based tests for CancelAppointmentRequest entity
+  - [x]* 2.1 Write property test: Cancel request creation preserves all input fields
     - **Property 1: Cancel request creation preserves all input fields**
     - For any valid patient, eligible appointment, and non-whitespace reason, the created entity has status Pending, correct PatientId, correct AppointmentId, the provided reason, and a CreatedAt timestamp
     - **Validates: Requirements 1.5, 6.1**
 
-  - [ ]* 2.2 Write property test: Whitespace-only reasons are rejected
+  - [x]* 2.2 Write property test: Whitespace-only reasons are rejected
     - **Property 2: Whitespace-only reasons are rejected**
     - For any string composed entirely of whitespace (including empty), creating a cancel request or denying with that reason throws an exception and no state change occurs
     - **Validates: Requirements 1.6, 4.1**
 
-  - [ ]* 2.3 Write property test: Approval transitions both request and appointment
+  - [x]* 2.3 Write property test: Approval transitions both request and appointment
     - **Property 3: Approval transitions both request and appointment**
     - For any pending CancelAppointmentRequest linked to a Scheduled or Rescheduled appointment, approving sets request status to Approved and appointment status to Canceled
     - **Validates: Requirements 3.2, 3.3**
 
-  - [ ]* 2.4 Write property test: Denial stores reason and preserves appointment status
+  - [x]* 2.4 Write property test: Denial stores reason and preserves appointment status
     - **Property 4: Denial stores reason and preserves appointment status**
     - For any pending CancelAppointmentRequest and valid non-whitespace denial reason, denying sets request status to Denied, stores the denial reason, and leaves appointment status unchanged
     - **Validates: Requirements 4.2, 4.4**
 
-  - [ ]* 2.5 Write property test: Ineligible appointments are rejected
+  - [x]* 2.5 Write property test: Ineligible appointments are rejected
     - **Property 9: Ineligible appointments are rejected**
     - For any appointment with status Completed, Canceled, or Missed, attempting to create a cancel request throws an exception
     - **Validates: Requirements 5.3**
@@ -54,7 +54,7 @@ Implement a request-based cancellation workflow for appointments. Patients submi
 - [x] 3. Checkpoint
   - Ensure all tests pass, ask the user if questions arise.
 
-- [ ] 4. Create API controller and contracts
+- [x] 4. Create API controller and contracts
   - [x] 4.1 Create request/response DTOs in `ClinicScheduler.Web/Contracts/CancelAppointmentRequests/`
     - `CreateCancelAppointmentRequestDto` with `AppointmentId` (int) and `Reason` (string)
     - `CancelAppointmentRequestDto` with all entity fields mapped for API responses
@@ -66,7 +66,7 @@ Implement a request-based cancellation workflow for appointments. Patients submi
     - `GET api/cancel-appointment-requests/{id}`: get a single cancel request
     - _Requirements: 7.1, 7.2, 7.3, 7.4_
 
-  - [ ]* 4.3 Write property tests for notification fan-out and content
+  - [x]* 4.3 Write property tests for notification fan-out and content
     - **Property 5: Staff notification fan-out on creation**
     - For any set of staff users and any newly created cancel request, the system creates exactly one CancellationRequested notification per staff user
     - **Validates: Requirements 2.1**
@@ -74,7 +74,7 @@ Implement a request-based cancellation workflow for appointments. Patients submi
     - For any patient name, appointment date, and time, the CancellationRequested notification message contains the patient name, formatted date, and formatted time
     - **Validates: Requirements 2.2**
 
-  - [ ]* 4.4 Write property tests for approval and denial notifications
+  - [x]* 4.4 Write property tests for approval and denial notifications
     - **Property 7: Approval creates patient notification**
     - For any approved cancel request, the system creates exactly one CancellationApproved notification for the patient's user account
     - **Validates: Requirements 3.4**

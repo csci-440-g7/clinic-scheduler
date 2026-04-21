@@ -27,6 +27,7 @@
     <ProjectReference Include="..\ClinicScheduler.Core\ClinicScheduler.Core.csproj" />
     <ProjectReference Include="..\ClinicScheduler.Infrastructure\ClinicScheduler.Infrastructure.csproj" />
     <ProjectReference Include="..\ClinicScheduler.Shared\ClinicScheduler.Shared.csproj" />
+    <ProjectReference Include="..\ClinicScheduler.Web\ClinicScheduler.Web.csproj" />
   </ItemGroup>
 
 </Project>
