@@ -43,5 +43,6 @@ jobs:
           command_timeout: 15m
           script: |
             cd /home/ec2-user/clinic-scheduler
-            git pull origin MVP
+            git fetch origin MVP
+            git reset --hard origin/MVP
             bash deploy/start-native.sh
