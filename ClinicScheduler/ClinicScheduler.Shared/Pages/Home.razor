@@ -25,9 +25,9 @@
         <!-- Stat cards -->
         <MudGrid>
             <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="2" Class="pa-4 rounded-lg">
+                <MudPaper Elevation="2" Class="pa-4 rounded-lg" role="region" aria-label="Appointments today">
                     <div class="d-flex align-center gap-3">
-                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Color="Color.Info" Size="Size.Large" />
+                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Color="Color.Info" Size="Size.Large" aria-hidden="true" />
                         <div>
                             <MudText Typo="Typo.h4">@_todayCount</MudText>
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">Appointments Today</MudText>
@@ -36,9 +36,9 @@
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="2" Class="pa-4 rounded-lg">
+                <MudPaper Elevation="2" Class="pa-4 rounded-lg" role="region" aria-label="Scheduled appointments">
                     <div class="d-flex align-center gap-3">
-                        <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Color="Color.Success" Size="Size.Large" />
+                        <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Color="Color.Success" Size="Size.Large" aria-hidden="true" />
                         <div>
                             <MudText Typo="Typo.h4">@_scheduledCount</MudText>
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">Scheduled</MudText>
@@ -47,9 +47,9 @@
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="2" Class="pa-4 rounded-lg">
+                <MudPaper Elevation="2" Class="pa-4 rounded-lg" role="region" aria-label="Active patients">
                     <div class="d-flex align-center gap-3">
-                        <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Large" />
+                        <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Large" aria-hidden="true" />
                         <div>
                             <MudText Typo="Typo.h4">@_patientCount</MudText>
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">Active Patients</MudText>
@@ -58,11 +58,11 @@
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="2" Class="pa-4 rounded-lg">
+                <MudPaper Elevation="2" Class="pa-4 rounded-lg" role="region" aria-label="Pending requests">
                     <div class="d-flex align-center gap-3">
                         <MudIcon Icon="@Icons.Material.Filled.Notifications"
                                  Color="@(_pendingRequests.Count > 0 ? Color.Warning : Color.Default)"
-                                 Size="Size.Large" />
+                                 Size="Size.Large" aria-hidden="true" />
                         <div>
                             <MudText Typo="Typo.h4">@_pendingRequests.Count</MudText>
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">Pending Requests</MudText>

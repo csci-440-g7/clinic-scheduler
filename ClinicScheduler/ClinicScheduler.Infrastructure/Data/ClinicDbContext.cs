@@ -1,7 +1,9 @@
+using System.Text;
 using ClinicScheduler.Core.Entities;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace ClinicScheduler.Infrastructure.Data;
 
@@ -25,6 +27,8 @@ public class ClinicDbContext : IdentityDbContext<AppUser>
     public DbSet<Notification> Notifications => Set<Notification>();
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
     public DbSet<CancelAppointmentRequest> CancelAppointmentRequests => Set<CancelAppointmentRequest>();
+    public DbSet<TimeSlot> TimeSlots => Set<TimeSlot>();
+    public DbSet<ScheduleConflict> ScheduleConflicts => Set<ScheduleConflict>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -50,12 +54,29 @@ public class ClinicDbContext : IdentityDbContext<AppUser>
         modelBuilder.Entity<Therapist>()
             .HasIndex(t => t.Email)
             .IsUnique();
+
+        modelBuilder.Entity<Therapist>()
+            .HasIndex(t => t.NpiNumber)
+            .IsUnique()
+            .HasFilter("\"NpiNumber\" IS NOT NULL");
+
+        modelBuilder.Entity<Location>()
+            .HasMany(l => l.TimeSlots)
+            .WithOne(ts => ts.Location)
+            .HasForeignKey(ts => ts.LocationId)
+            .OnDelete(DeleteBehavior.Cascade);
+
+        modelBuilder.Entity<Appointment>()
+            .HasMany(a => a.ScheduleConflicts)
+            .WithOne(sc => sc.Appointment)
+            .HasForeignKey(sc => sc.AppointmentId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
     
     /// <summary>
-    /// Automatically update the UpdatedAt timestamp on save.
+    /// Automatically update the UpdatedAt timestamp and create audit log entries on save.
     /// </summary>
-    public override Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
+    public override async Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
     {
         foreach (var entry in ChangeTracker.Entries()
                      .Where(e => e.State is EntityState.Modified))
@@ -66,6 +87,119 @@ public class ClinicDbContext : IdentityDbContext<AppUser>
             }
         }
 
-        return base.SaveChangesAsync(cancellationToken);
+        try
+        {
+            CreateAuditLogEntries();
+        }
+        catch
+        {
+            // Audit logging is best-effort; failures must not block the primary save.
+        }
+
+        return await base.SaveChangesAsync(cancellationToken);
+    }
+
+    private static readonly HashSet<string> ExcludedTypeNames =
+    [
+        nameof(AuditLog),
+        nameof(IdentityRole),
+        nameof(IdentityUserRole<string>),
+        nameof(IdentityUserClaim<string>),
+        nameof(IdentityUserLogin<string>),
+        nameof(IdentityUserToken<string>),
+        nameof(IdentityRoleClaim<string>),
+    ];
+
+    private static bool IsExcludedFromAudit(EntityEntry entry)
+    {
+        var type = entry.Entity.GetType();
+        return ExcludedTypeNames.Contains(type.Name)
+               || typeof(IdentityUser).IsAssignableFrom(type);
+    }
+
+    private void CreateAuditLogEntries()
+    {
+        var entries = ChangeTracker.Entries()
+            .Where(e => e.State is EntityState.Added or EntityState.Modified or EntityState.Deleted)
+            .Where(e => !IsExcludedFromAudit(e))
+            .ToList();
+
+        foreach (var entry in entries)
+        {
+            var entityName = entry.Entity.GetType().Name;
+            var entityId = GetEntityId(entry);
+            var action = entry.State switch
+            {
+                EntityState.Added => AuditAction.Created,
+                EntityState.Modified => AuditAction.Modified,
+                EntityState.Deleted => AuditAction.Deleted,
+                _ => throw new InvalidOperationException()
+            };
+            var changeSummary = BuildChangeSummary(entry);
+
+            var auditLog = new AuditLog(entityName, entityId, action, changeSummary);
+            AuditLogs.Add(auditLog);
+        }
+    }
+
+    private static string GetEntityId(EntityEntry entry)
+    {
+        var idProperty = entry.Entity.GetType().GetProperty("Id");
+        if (idProperty is not null)
+        {
+            var value = idProperty.GetValue(entry.Entity);
+            return value?.ToString() ?? "0";
+        }
+
+        return "unknown";
+    }
+
+    private static string? BuildChangeSummary(EntityEntry entry)
+    {
+        return entry.State switch
+        {
+            EntityState.Modified => BuildModifiedSummary(entry),
+            EntityState.Added => BuildAddedSummary(entry),
+            EntityState.Deleted => BuildDeletedSummary(entry),
+            _ => null
+        };
+    }
+
+    private static string? BuildModifiedSummary(EntityEntry entry)
+    {
+        var sb = new StringBuilder();
+        foreach (var prop in entry.Properties.Where(p => p.IsModified))
+        {
+            if (sb.Length > 0) sb.Append("; ");
+            sb.Append($"{prop.Metadata.Name}: {prop.OriginalValue} → {prop.CurrentValue}");
+        }
+
+        return sb.Length > 0 ? sb.ToString() : null;
+    }
+
+    private static string? BuildAddedSummary(EntityEntry entry)
+    {
+        var sb = new StringBuilder();
+        foreach (var prop in entry.Properties)
+        {
+            if (prop.CurrentValue is null) continue;
+            if (sb.Length > 0) sb.Append("; ");
+            sb.Append($"{prop.Metadata.Name}: {prop.CurrentValue}");
+        }
+
+        return sb.Length > 0 ? sb.ToString() : null;
+    }
+
+    private static string? BuildDeletedSummary(EntityEntry entry)
+    {
+        var sb = new StringBuilder();
+        foreach (var prop in entry.Properties)
+        {
+            if (prop.OriginalValue is null) continue;
+            if (sb.Length > 0) sb.Append("; ");
+            sb.Append($"{prop.Metadata.Name}: {prop.OriginalValue}");
+        }
+
+        return sb.Length > 0 ? sb.ToString() : null;
     }
 }

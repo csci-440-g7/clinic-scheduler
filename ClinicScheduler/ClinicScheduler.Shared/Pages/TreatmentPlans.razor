@@ -30,6 +30,13 @@
             <CellTemplate>@context.Item.FrequencyPerWeek x/week</CellTemplate>
         </TemplateColumn>
         <PropertyColumn Property="p => p.TotalDays" Title="Total Days" />
+        <TemplateColumn Title="Status">
+            <CellTemplate>
+                <MudChip T="string" Size="Size.Small" Color="@StatusChipColor(context.Item.Status)">
+                    @context.Item.Status
+                </MudChip>
+            </CellTemplate>
+        </TemplateColumn>
         <TemplateColumn Title="Start Date">
             <CellTemplate>@context.Item.StartDate.ToString("MMM d, yyyy")</CellTemplate>
         </TemplateColumn>
@@ -50,10 +57,34 @@
         </TemplateColumn>
         <TemplateColumn Title="Actions" Sortable="false">
             <CellTemplate>
+                @if (context.Item.Status == TreatmentPlanStatus.Active)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.Pause" Size="Size.Small"
+                                   Color="Color.Warning"
+                                   aria-label="Suspend plan"
+                                   OnClick="@(() => SuspendAsync(context.Item))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Stop" Size="Size.Small"
+                                   Color="Color.Error"
+                                   aria-label="End plan"
+                                   OnClick="@(() => EndAsync(context.Item))" />
+                }
+                else if (context.Item.Status == TreatmentPlanStatus.Suspended)
+                {
+                    <MudIconButton Icon="@Icons.Material.Filled.PlayArrow" Size="Size.Small"
+                                   Color="Color.Success"
+                                   aria-label="Reactivate plan"
+                                   OnClick="@(() => ReactivateAsync(context.Item))" />
+                    <MudIconButton Icon="@Icons.Material.Filled.Stop" Size="Size.Small"
+                                   Color="Color.Error"
+                                   aria-label="End plan"
+                                   OnClick="@(() => EndAsync(context.Item))" />
+                }
                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               aria-label="Edit plan"
                                OnClick="@(() => OpenEditDialog(context.Item))" />
                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
                                Color="Color.Error"
+                               aria-label="Delete plan"
                                OnClick="@(() => DeleteAsync(context.Item))" />
             </CellTemplate>
         </TemplateColumn>
@@ -282,4 +313,63 @@
             Snackbar.Add(ex.Message, Severity.Error);
         }
     }
+
+    private async Task SuspendAsync(TreatmentPlan plan)
+    {
+        try
+        {
+            var tracked = await DbContext.TreatmentPlans.FindAsync(plan.Id);
+            if (tracked is null) return;
+            tracked.Suspend();
+            await DbContext.SaveChangesAsync();
+            Snackbar.Add("Plan suspended.", Severity.Success);
+            await LoadPlansAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task EndAsync(TreatmentPlan plan)
+    {
+        try
+        {
+            var tracked = await DbContext.TreatmentPlans.FindAsync(plan.Id);
+            if (tracked is null) return;
+            tracked.End();
+            await DbContext.SaveChangesAsync();
+            Snackbar.Add("Plan ended.", Severity.Success);
+            await LoadPlansAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private async Task ReactivateAsync(TreatmentPlan plan)
+    {
+        try
+        {
+            var tracked = await DbContext.TreatmentPlans.FindAsync(plan.Id);
+            if (tracked is null) return;
+            tracked.Reactivate();
+            await DbContext.SaveChangesAsync();
+            Snackbar.Add("Plan reactivated.", Severity.Success);
+            await LoadPlansAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+
+    private static Color StatusChipColor(TreatmentPlanStatus status) => status switch
+    {
+        TreatmentPlanStatus.Active => Color.Success,
+        TreatmentPlanStatus.Suspended => Color.Warning,
+        TreatmentPlanStatus.Ended => Color.Default,
+        _ => Color.Default
+    };
 }

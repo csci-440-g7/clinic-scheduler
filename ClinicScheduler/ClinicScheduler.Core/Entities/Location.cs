@@ -19,10 +19,21 @@ public class Location
     /// </summary>
     public string? TimeZone { get; set; }
 
+    /// <summary>
+    /// The maximum number of patients this location can serve in a single day.
+    /// Defaults to 12.
+    /// </summary>
+    public int DailyCapacity { get; private set; } = 12;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<Room> Rooms { get; set; } = [];
+
+    /// <summary>
+    /// Navigation property for the configurable time slots at this location.
+    /// </summary>
+    public ICollection<TimeSlot> TimeSlots { get; set; } = [];
 
     /// <summary>
     /// Private constructor for EF Core.
@@ -56,6 +67,22 @@ public class Location
         State = state;
         ZipCode = zipCode;
         TimeZone = timeZone;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Sets the daily patient capacity for this location.
+    /// </summary>
+    /// <param name="capacity">The maximum number of patients per day. Must be greater than zero.</param>
+    /// <exception cref="ArgumentOutOfRangeException">Thrown when <paramref name="capacity"/> is not a positive integer.</exception>
+    public void SetDailyCapacity(int capacity)
+    {
+        if (capacity <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(capacity), "Daily capacity must be a positive integer.");
+        }
+
+        DailyCapacity = capacity;
         UpdatedAt = DateTime.UtcNow;
     }
 }

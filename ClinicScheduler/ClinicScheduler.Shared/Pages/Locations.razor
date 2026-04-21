@@ -1,0 +1,184 @@
+@page "/locations"
+@attribute [Authorize(Roles = "Admin,ClinicManager")]
+@inject IRepository<Location> LocationRepo
+@inject ISnackbar Snackbar
+
+<PageTitle>Locations</PageTitle>
+
+<div class="d-flex align-center justify-space-between mb-4">
+    <MudText Typo="Typo.h5">Locations</MudText>
+    <MudButton Variant="Variant.Filled" Color="Color.Primary"
+               StartIcon="@Icons.Material.Filled.Add"
+               OnClick="OpenCreateDialog">
+        Add Location
+    </MudButton>
+</div>
+
+<MudDataGrid T="Location" Items="_locations" Loading="_loading"
+             SortMode="SortMode.Single" Hover="true" Elevation="1">
+    <Columns>
+        <PropertyColumn Property="l => l.Name" Title="Name" />
+        <PropertyColumn Property="l => l.Address" Title="Address" />
+        <PropertyColumn Property="l => l.City" Title="City" />
+        <PropertyColumn Property="l => l.State" Title="State" />
+        <PropertyColumn Property="l => l.ZipCode" Title="Zip Code" />
+        <PropertyColumn Property="l => l.TimeZone" Title="Time Zone" />
+        <PropertyColumn Property="l => l.DailyCapacity" Title="Daily Capacity" />
+        <TemplateColumn Title="Actions" Sortable="false">
+            <CellTemplate>
+                <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               aria-label="Edit location"
+                               OnClick="@(() => OpenEditDialog(context.Item))" />
+                <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
+                               Color="Color.Error"
+                               aria-label="Delete location"
+                               OnClick="@(() => DeleteAsync(context.Item))" />
+            </CellTemplate>
+        </TemplateColumn>
+    </Columns>
+    <NoRecordsContent>
+        <MudText Class="pa-4">No locations found. Add one to get started.</MudText>
+    </NoRecordsContent>
+</MudDataGrid>
+
+<MudDialog @bind-Visible="_dialogOpen" Options="_dialogOptions">
+    <TitleContent>
+        <MudText Typo="Typo.h6">@(_isEdit ? "Edit Location" : "New Location")</MudText>
+    </TitleContent>
+    <DialogContent>
+        @if (_errorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3">@_errorMessage</MudAlert>
+        }
+        <MudTextField @bind-Value="_formName" Label="Name" Required="true"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        <MudTextField @bind-Value="_formAddress" Label="Address" Required="true"
+                      Variant="Variant.Outlined" Class="mb-3" />
+        <MudGrid>
+            <MudItem xs="6">
+                <MudTextField @bind-Value="_formCity" Label="City"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="3">
+                <MudTextField @bind-Value="_formState" Label="State"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+            <MudItem xs="3">
+                <MudTextField @bind-Value="_formZipCode" Label="Zip Code"
+                              Variant="Variant.Outlined" />
+            </MudItem>
+        </MudGrid>
+        <MudTextField @bind-Value="_formTimeZone" Label="Time Zone"
+                      Variant="Variant.Outlined" Class="mt-3"
+                      HelperText="IANA Time Zone ID (e.g. America/Chicago)"
+                      Placeholder="America/New_York" />
+        <MudNumericField T="int" @bind-Value="_formDailyCapacity" Label="Daily Capacity"
+                         Min="1" Variant="Variant.Outlined" Class="mt-3"
+                         HelperText="Maximum patients per day (must be greater than 0)" />
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="@(() => _dialogOpen = false)">Cancel</MudButton>
+        <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="SaveAsync">
+            @(_isEdit ? "Save" : "Create")
+        </MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    private List<Location> _locations = [];
+    private bool _loading = true;
+    private bool _dialogOpen;
+    private bool _isEdit;
+    private Location? _editTarget;
+    private string _formName = "";
+    private string _formAddress = "";
+    private string? _formCity;
+    private string? _formState;
+    private string? _formZipCode;
+    private string? _formTimeZone;
+    private int _formDailyCapacity = 12;
+    private string? _errorMessage;
+
+    private readonly DialogOptions _dialogOptions = new() { MaxWidth = MaxWidth.Small, FullWidth = true };
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _locations = (await LocationRepo.GetAllAsync()).ToList();
+        _loading = false;
+    }
+
+    private void OpenCreateDialog()
+    {
+        _isEdit = false;
+        _editTarget = null;
+        _formName = "";
+        _formAddress = "";
+        _formCity = null;
+        _formState = null;
+        _formZipCode = null;
+        _formTimeZone = null;
+        _formDailyCapacity = 12;
+        _errorMessage = null;
+        _dialogOpen = true;
+    }
+
+    private void OpenEditDialog(Location loc)
+    {
+        _isEdit = true;
+        _editTarget = loc;
+        _formName = loc.Name;
+        _formAddress = loc.Address;
+        _formCity = loc.City;
+        _formState = loc.State;
+        _formZipCode = loc.ZipCode;
+        _formTimeZone = loc.TimeZone;
+        _formDailyCapacity = loc.DailyCapacity;
+        _errorMessage = null;
+        _dialogOpen = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        _errorMessage = null;
+        try
+        {
+            if (_isEdit && _editTarget is not null)
+            {
+                _editTarget.UpdateDetails(_formName, _formAddress, _formCity, _formState, _formZipCode, _formTimeZone);
+                _editTarget.SetDailyCapacity(_formDailyCapacity);
+                await LocationRepo.UpdateAsync(_editTarget);
+            }
+            else
+            {
+                var loc = new Location(_formName, _formAddress);
+                loc.UpdateDetails(_formName, _formAddress, _formCity, _formState, _formZipCode, _formTimeZone);
+                loc.SetDailyCapacity(_formDailyCapacity);
+                await LocationRepo.AddAsync(loc);
+            }
+            _dialogOpen = false;
+            Snackbar.Add(_isEdit ? "Location updated." : "Location created.", Severity.Success);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+        }
+    }
+
+    private async Task DeleteAsync(Location loc)
+    {
+        try
+        {
+            await LocationRepo.DeleteAsync(loc);
+            Snackbar.Add("Location deleted.", Severity.Info);
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add(ex.Message, Severity.Error);
+        }
+    }
+}

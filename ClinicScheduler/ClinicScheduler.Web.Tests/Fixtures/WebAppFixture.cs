@@ -70,6 +70,15 @@ public class WebAppFixture : IAsyncLifetime
                 });
             });
 
+        // Ensure the database schema is created.
+        // Program.cs calls db.Database.Migrate() which silently fails in Testing
+        // when no migration files exist. EnsureCreated() creates the schema from the model.
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
+            await db.Database.EnsureCreatedAsync();
+        }
+
         Client = Factory.CreateClient();
     }
 
@@ -83,9 +92,11 @@ public class WebAppFixture : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
         await db.Database.ExecuteSqlRawAsync(@"
             TRUNCATE TABLE
+                ""ScheduleConflicts"",
                 ""Appointments"",
                 ""TreatmentPlanTherapies"",
                 ""TreatmentPlans"",
+                ""TimeSlots"",
                 ""Rooms"",
                 ""Locations"",
                 ""TherapyTypes"",
