@@ -359,6 +359,7 @@
                 </MudSelect>
                 <MudTextField @bind-Value="_reqNotes" Label="Why do you need this appointment?"
                               Variant="Variant.Outlined" Lines="4" Required="true"
+                              Immediate="true"
                               Placeholder="Describe your concern, symptoms, or reason for the visit…" />
             </DialogContent>
             <DialogActions>
@@ -501,9 +502,11 @@
         var patient = await DbContext.Patients.FindAsync(_currentPatientId);
         if (patient is null) return;
 
-        Therapist? preferredTherapist = _reqTherapistId.HasValue
-            ? await TherapistRepo.GetByIdAsync(_reqTherapistId.Value)
-            : null;
+        Therapist? preferredTherapist = null;
+        if (_reqTherapistId.HasValue)
+        {
+            preferredTherapist = await DbContext.Therapists.FindAsync(_reqTherapistId.Value);
+        }
 
         // Compute preferred datetime if patient specified one
         DateTime preferredDt = DateTime.UtcNow;
