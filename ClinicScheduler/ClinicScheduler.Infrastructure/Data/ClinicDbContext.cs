@@ -102,6 +102,7 @@ public class ClinicDbContext : IdentityDbContext<AppUser>
     private static readonly HashSet<string> ExcludedTypeNames =
     [
         nameof(AuditLog),
+        nameof(Notification),
         nameof(IdentityRole),
         nameof(IdentityUserRole<string>),
         nameof(IdentityUserClaim<string>),

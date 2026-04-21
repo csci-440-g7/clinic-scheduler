@@ -220,11 +220,11 @@
     .muted { color: #6b7280; }
     .list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 8px; }
     .list-item { border: 1px solid #e5e7eb; border-radius: 10px; background: #fafafa; overflow: hidden; }
-    .list-item-btn { width: 100%; text-align: left; border: none; background: transparent; cursor: pointer; font: inherit; padding: 14px 16px; color: inherit; }
+    .list-item-btn { width: 100%; text-align: left; border: none; background: transparent; cursor: pointer; font: inherit; padding: 14px 16px; color: inherit; display: flex; flex-direction: column; align-items: stretch; }
     .list-item-btn:hover { background: #eff6ff; }
-    .list-title { font-weight: 700; font-size: 15px; margin-bottom: 6px; line-height: 1.4; }
-    .list-sub { color: #6b7280; font-size: 13px; margin-top: 4px; line-height: 1.4; }
-    .list-hint { margin-top: 8px; font-size: 12px; font-weight: 600; color: #2563eb; line-height: 1.4; }
+    .list-title { display: block; font-weight: 700; font-size: 15px; margin-bottom: 6px; line-height: 1.4; }
+    .list-sub { display: block; color: #6b7280; font-size: 13px; margin-top: 4px; line-height: 1.4; }
+    .list-hint { display: block; margin-top: 8px; font-size: 12px; font-weight: 600; color: #2563eb; line-height: 1.4; }
     .modal-root { position: fixed; inset: 0; z-index: 1000; display: flex; align-items: center; justify-content: center; padding: 20px; box-sizing: border-box; background: rgba(15,23,42,0.45); backdrop-filter: blur(2px); }
     .modal-panel { width: 100%; max-width: 460px; max-height: 90vh; overflow: auto; border-radius: 14px; background: #fff; padding: 16px 18px; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); }
     .modal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
