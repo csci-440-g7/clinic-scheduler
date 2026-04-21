@@ -33,6 +33,7 @@ jobs:
   deploy:
     needs: build-and-test
     runs-on: ubuntu-latest
+    if: github.repository == 'Bradly187/clinic-scheduler'
     steps:
       - name: Deploy via SSH
         uses: appleboy/ssh-action@v1
