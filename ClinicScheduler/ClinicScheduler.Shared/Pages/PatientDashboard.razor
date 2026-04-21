@@ -1,6 +1,6 @@
 @page "/dashboard/patient"
 @inject NavigationManager Nav
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject IRepository<Therapist> TherapistRepo
 @inject AuthenticationStateProvider AuthState
 @inject ISnackbar Snackbar
@@ -137,6 +137,7 @@
             return;
         }
 
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         _patient = await DbContext.Patients.FirstOrDefaultAsync(p => p.Email == email);
 
         if (_patient is null)
@@ -147,13 +148,6 @@
 
         _editPhone = _patient.Phone ?? "";
         _editEmail = _patient.Email;
-
-        await LoadAppointmentNotesAsync();
-    }
-
-    private async Task LoadAppointmentNotesAsync()
-    {
-        if (_patient is null) return;
 
         _appointmentNotes = await DbContext.Appointments
             .Include(a => a.Therapist)
@@ -192,8 +186,12 @@
 
         try
         {
-            _patient.UpdateContactInfo(_editEmail?.Trim() ?? "", _editPhone?.Trim());
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
+            var tracked = await DbContext.Patients.FindAsync(_patient.Id);
+            if (tracked is null) return;
+            tracked.UpdateContactInfo(_editEmail?.Trim() ?? "", _editPhone?.Trim());
             await DbContext.SaveChangesAsync();
+            _patient = tracked;
             _profileSavedMessage = "Profile saved.";
             Snackbar.Add("Profile saved.", Severity.Success);
         }

@@ -1,6 +1,7 @@
 using ClinicScheduler.Core.Entities;
 using ClinicScheduler.Core.Interfaces;
 using ClinicScheduler.Web.Contracts.Therapists;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicScheduler.Web.Api;
@@ -8,6 +9,7 @@ namespace ClinicScheduler.Web.Api;
 /// <summary>Manages therapist resources.</summary>
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class TherapistsController : ControllerBase
 {
     private readonly IRepository<Therapist> _repository;
@@ -20,6 +22,7 @@ public class TherapistsController : ControllerBase
 
     /// <summary>Returns all therapists.</summary>
     [HttpGet]
+    [Authorize(Roles = RoleNames.StaffOrAbove)]
     public async Task<ActionResult<IReadOnlyList<TherapistDto>>> GetAll(CancellationToken ct)
     {
         var therapists = await _repository.GetAllAsync(ct);
@@ -28,6 +31,7 @@ public class TherapistsController : ControllerBase
 
     /// <summary>Returns a single therapist by ID.</summary>
     [HttpGet("{id:int}")]
+    [Authorize(Roles = RoleNames.StaffOrAbove)]
     public async Task<ActionResult<TherapistDto>> GetById(int id, CancellationToken ct)
     {
         var therapist = await _repository.GetByIdAsync(id, ct);
@@ -36,6 +40,7 @@ public class TherapistsController : ControllerBase
 
     /// <summary>Creates a new therapist record.</summary>
     [HttpPost]
+    [Authorize(Roles = RoleNames.AdminOrManager)]
     public async Task<ActionResult<TherapistDto>> Create(CreateTherapistRequest request, CancellationToken ct)
     {
         var therapist = new Therapist(request.FirstName, request.LastName, request.Email, request.Phone, request.Specialty);
@@ -45,6 +50,7 @@ public class TherapistsController : ControllerBase
 
     /// <summary>Updates a therapist's personal, contact, and specialty information.</summary>
     [HttpPut("{id:int}")]
+    [Authorize(Roles = RoleNames.AdminOrManager)]
     public async Task<IActionResult> Update(int id, UpdateTherapistRequest request, CancellationToken ct)
     {
         var existing = await _repository.GetByIdAsync(id, ct);
@@ -59,6 +65,7 @@ public class TherapistsController : ControllerBase
 
     /// <summary>Deletes a therapist record.</summary>
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = RoleNames.AdminOrManager)]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         var therapist = await _repository.GetByIdAsync(id, ct);

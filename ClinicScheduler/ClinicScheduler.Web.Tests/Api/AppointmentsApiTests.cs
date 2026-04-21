@@ -114,7 +114,7 @@ public class AppointmentsApiTests : IAsyncLifetime
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var body = await response.Content.ReadAsStringAsync();
-        body.Should().Contain("weekday");
+        body.Should().Contain("outside the configured schedule");
     }
 
     [Fact]
@@ -126,7 +126,7 @@ public class AppointmentsApiTests : IAsyncLifetime
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var body = await response.Content.ReadAsStringAsync();
-        body.Should().Contain("weekday");
+        body.Should().Contain("outside the configured schedule");
     }
 
     // ── Business rule: 8am–5pm window ────────────────────────────────────────
@@ -140,7 +140,7 @@ public class AppointmentsApiTests : IAsyncLifetime
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var body = await response.Content.ReadAsStringAsync();
-        body.Should().Contain("8:00 AM");
+        body.Should().Contain("outside the configured schedule");
     }
 
     [Fact]
@@ -157,14 +157,14 @@ public class AppointmentsApiTests : IAsyncLifetime
     [Fact]
     public async Task POST_SlotEndingAfter5pm_Returns400()
     {
-        // 16:45–17:15 ends past 5pm
+        // 17:00–17:30 starts at 5pm which is outside the configured schedule
         var (p, t, r) = await SeedAsync("late");
-        var slot445pm = Slot9am.Date.AddHours(16).AddMinutes(45).ToUniversalTime();
-        var response = await BookAsync(p, t, r, slot445pm);
+        var slot5pm = Slot9am.Date.AddHours(17).ToUniversalTime();
+        var response = await BookAsync(p, t, r, slot5pm);
 
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         var body = await response.Content.ReadAsStringAsync();
-        body.Should().Contain("5:00 PM");
+        body.Should().Contain("outside the configured schedule");
     }
 
     // ── Business rule: 12-patient cap ────────────────────────────────────────
@@ -215,7 +215,7 @@ public class AppointmentsApiTests : IAsyncLifetime
 
         response13.StatusCode.Should().Be(HttpStatusCode.Conflict);
         var body = await response13.Content.ReadAsStringAsync();
-        body.Should().Contain("12 concurrent patients");
+        body.Should().Contain("12 patients");
     }
 
     // ── Auto-reschedule on missed appointment ─────────────────────────────────

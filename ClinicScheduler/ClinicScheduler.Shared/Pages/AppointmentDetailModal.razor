@@ -1,4 +1,4 @@
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 
 <div class="appt-modal-root"
      @onclick="OnClose"
@@ -112,6 +112,7 @@
 
     private async Task CheckPendingCancelRequestAsync()
     {
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         _hasPendingCancelRequest = await DbContext.CancelAppointmentRequests
             .AnyAsync(r => r.AppointmentId == Appointment.Id && r.Status == AppointmentRequestStatus.Pending);
     }
@@ -126,8 +127,14 @@
     private async Task SaveNotesAsync()
     {
         if (ViewerRole != "doctor") return;
-        Appointment.Notes = string.IsNullOrWhiteSpace(_editNotes) ? null : _editNotes.Trim();
-        await DbContext.SaveChangesAsync();
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
+        var tracked = await DbContext.Appointments.FindAsync(Appointment.Id);
+        if (tracked is not null)
+        {
+            tracked.Notes = string.IsNullOrWhiteSpace(_editNotes) ? null : _editNotes.Trim();
+            await DbContext.SaveChangesAsync();
+            Appointment.Notes = tracked.Notes;
+        }
         _savedMessage = "Saved.";
         await OnStatusChanged.InvokeAsync();
     }

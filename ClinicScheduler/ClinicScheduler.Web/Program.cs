@@ -35,6 +35,7 @@ builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 // Register business logic services
 builder.Services.AddScoped<AppointmentSchedulingService>();
 builder.Services.AddScoped<MissedAppointmentService>();
+builder.Services.AddScoped<AppointmentNotificationService>();
 
 // Background services
 builder.Services.AddHostedService<AppointmentReminderService>();
@@ -42,20 +43,18 @@ builder.Services.AddHostedService<AppointmentReminderService>();
 // ASP.NET Core Identity
 builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
 {
+    // Baseline: all environments
+    options.Password.RequireDigit = true;
+    options.Password.RequiredLength = 8;
+    options.Password.RequireNonAlphanumeric = true;
+    options.Password.RequireUppercase = true;
+
+    // Elevated: production only
     if (builder.Environment.IsProduction())
     {
-        options.Password.RequireDigit = true;
         options.Password.RequiredLength = 10;
-        options.Password.RequireNonAlphanumeric = true;
-        options.Password.RequireUppercase = true;
     }
-    else
-    {
-        options.Password.RequireDigit = false;
-        options.Password.RequiredLength = 6;
-        options.Password.RequireNonAlphanumeric = false;
-        options.Password.RequireUppercase = false;
-    }
+
     options.SignIn.RequireConfirmedAccount = false;
 })
 .AddEntityFrameworkStores<ClinicDbContext>()
@@ -139,23 +138,31 @@ var app = builder.Build();
 
 // Auto-apply EF migrations on startup (safe to run repeatedly; no-ops when up-to-date)
 // In development, handle database errors gracefully to allow testing without a database
-if (app.Environment.IsDevelopment())
+if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
 {
     using (var scope = app.Services.CreateScope())
     {
+        var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
         try
         {
-            var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
+            db.Database.Migrate();
+        }
+        catch (Exception ex)
+        {
+            app.Logger.LogWarning(ex, "Database migration skipped: {Message}", ex.Message);
+        }
+
+        try
+        {
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
             var adminPassword = app.Configuration["SeedAdmin:Password"]
                 ?? throw new InvalidOperationException("SeedAdmin:Password is not configured.");
-            db.Database.Migrate();
-            await DatabaseSeeder.SeedAsync(db, userManager, roleManager, adminPassword);
+            await DatabaseSeeder.SeedAsync(db, userManager, roleManager, adminPassword, isDevelopment: true);
         }
         catch (Exception ex)
         {
-            app.Logger.LogWarning(ex, "Database migration/seed skipped: {Message}", ex.Message);
+            app.Logger.LogWarning(ex, "Database seed skipped: {Message}", ex.Message);
         }
     }
 }
@@ -170,7 +177,7 @@ else
             ?? throw new InvalidOperationException(
                 "SeedAdmin:Password must be set via environment variable (SeedAdmin__Password) in production.");
         db.Database.Migrate();
-        await DatabaseSeeder.SeedAsync(db, userManager, roleManager, adminPassword);
+        await DatabaseSeeder.SeedAsync(db, userManager, roleManager, adminPassword, isDevelopment: false);
     }
 }
 

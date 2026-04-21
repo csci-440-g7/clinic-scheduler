@@ -45,6 +45,11 @@ public class Appointment
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
     /// <summary>
+    /// Collection of scheduling conflicts associated with this appointment.
+    /// </summary>
+    public ICollection<ScheduleConflict> ScheduleConflicts { get; set; } = [];
+
+    /// <summary>
     /// Private constructor for EF Core.
     /// </summary>
     private Appointment() { }

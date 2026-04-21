@@ -1,4 +1,5 @@
 ﻿@inject AuthenticationStateProvider AuthState
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -58,6 +59,12 @@
             </div>
 
             <div class="nav-item px-3">
+                <NavLink class="nav-link" href="locations">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Locations
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
                 <NavLink class="nav-link" href="therapy-types">
                     <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Therapy Types
                 </NavLink>
@@ -90,19 +97,24 @@
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="notifications">
                     <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Notifications
+                    @if (_unreadCount > 0)
+                    {
+                        <span class="notification-badge">@_unreadCount</span>
+                    }
                 </NavLink>
             </div>
 
-            <div class="nav-item px-3 mt-3" style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 12px;">
-                <span class="nav-link" style="color: rgba(255,255,255,0.7); font-size: 0.85rem;">
+            <div class="nav-item px-3 mt-3" style="border-top: 1px solid rgba(0,0,0,0.15); padding-top: 12px;">
+                <span class="nav-link" style="color: #374151; font-size: 0.85rem; font-weight: 600;">
                     @_userEmail
                 </span>
             </div>
 
             <div class="nav-item px-3">
                 <form method="post" action="/account/logout">
-                    <button type="submit" class="nav-link" style="background:none; border:none; cursor:pointer; width:100%; text-align:left; color:rgba(255,255,255,0.7);">
-                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Sign Out
+                    <AntiforgeryToken />
+                    <button type="submit" class="nav-link" style="background:none; border:none; cursor:pointer; width:100%; text-align:left; color:#374151; font-weight:600;">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Logout
                     </button>
                 </form>
             </div>
@@ -116,6 +128,8 @@
     private bool _isManager;
     private bool _isStaffOrAbove;
     private string? _userEmail;
+    private string? _userId;
+    private int _unreadCount;
 
     protected override async Task OnInitializedAsync()
     {
@@ -130,5 +144,13 @@
 
         _isStaffOrAbove = _isAdmin || _isManager || isStaff || isTherapist;
         _userEmail = user.Identity?.Name;
+        _userId = user.FindFirst(c => c.Type == System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+
+        if (_isAuthenticated && _userId is not null)
+        {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
+            _unreadCount = await DbContext.Notifications
+                .CountAsync(n => n.UserId == _userId && !n.IsRead && !n.IsArchived);
+        }
     }
 }

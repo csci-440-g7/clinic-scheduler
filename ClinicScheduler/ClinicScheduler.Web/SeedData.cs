@@ -12,19 +12,24 @@ public static class DatabaseSeeder
 {
     /// <summary>Seeds roles, demo users, and sample clinic data if the database is empty.</summary>
     public static async Task SeedAsync(ClinicDbContext db, UserManager<AppUser> userManager,
-        RoleManager<IdentityRole> roleManager, string adminPassword)
+        RoleManager<IdentityRole> roleManager, string adminPassword, bool isDevelopment = false)
     {
-        // Seed roles
+        // Seed roles — always needed in all environments
         foreach (var role in new[] { "Admin", "ClinicManager", "Therapist", "Staff", "Patient" })
             if (!await roleManager.RoleExistsAsync(role))
                 await roleManager.CreateAsync(new IdentityRole(role));
 
-        // Seed demo accounts
-        await EnsureUser(userManager, "admin@clinic.com",          "Administrator",   adminPassword,    "Admin");
-        await EnsureUser(userManager, "manager@clinic.com",        "Clinic Manager",  "Manager@1234",   "ClinicManager");
-        await EnsureUser(userManager, "therapist@clinic.com",      "Demo Therapist",  "Therapist@1234", "Therapist");
-        await EnsureUser(userManager, "staff@clinic.com",          "Staff Member",    "Staff@Clinic1",  "Staff");
-        await EnsureUser(userManager, "patient@clinic.com",        "Demo Patient",    "Patient@1234",   "Patient");
+        // Admin account — always seeded (password comes from environment variable)
+        await EnsureUser(userManager, "admin@clinic.com", "Administrator", adminPassword, "Admin");
+
+        // Demo accounts — development only
+        if (isDevelopment)
+        {
+            await EnsureUser(userManager, "manager@clinic.com",        "Clinic Manager",  "Manager@1234",   "ClinicManager");
+            await EnsureUser(userManager, "therapist@clinic.com",      "Demo Therapist",  "Therapist@1234", "Therapist");
+            await EnsureUser(userManager, "staff@clinic.com",          "Staff Member",    "Staff@Clinic1",  "Staff");
+            await EnsureUser(userManager, "patient@clinic.com",        "Demo Patient",    "Patient@1234",   "Patient");
+        }
 
         static async Task EnsureUser(UserManager<AppUser> um, string email, string displayName, string password, string role)
         {
@@ -38,8 +43,8 @@ public static class DatabaseSeeder
                 await um.AddToRoleAsync(user, role);
         }
 
-        // Only seed clinic data if the database is completely empty
-        if (db.Patients.Any()) return;
+        // Only seed sample clinic data in development and if the database is completely empty
+        if (!isDevelopment || db.Patients.Any()) return;
 
         // ── Locations ────────────────────────────────────────────────────────
         var downtown = new Location("Downtown Medical Center", "123 Main Street");

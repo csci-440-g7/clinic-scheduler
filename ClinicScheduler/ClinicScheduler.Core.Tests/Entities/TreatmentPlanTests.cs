@@ -11,28 +11,9 @@ public class TreatmentPlanTests
     private Therapist CreateTestTherapist() =>
         new("Dr. Jones", "jones@clinic.com", "Physical Therapy");
 
-    [Fact]
-    public void Constructor_With40TotalDays_ShouldSucceed()
-    {
-        // Arrange
-        var patient = CreateTestPatient();
-        var therapist = CreateTestTherapist();
-        var startDate = new DateOnly(2026, 6, 1);
-
-        // Act
-        var plan = new TreatmentPlan(patient, therapist, frequencyPerWeek: 3, totalDays: 40, startDate);
-
-        // Assert
-        plan.TotalDays.Should().Be(40);
-        plan.FrequencyPerWeek.Should().Be(3);
-        plan.StartDate.Should().Be(startDate);
-        plan.EndDate.Should().BeAfter(startDate);
-    }
-
     [Theory]
     [InlineData(20)]
     [InlineData(30)]
-    [InlineData(40)]
     [InlineData(50)]
     public void Constructor_WithValidDuration_ShouldSucceed(int totalDays)
     {
@@ -51,6 +32,7 @@ public class TreatmentPlanTests
     [InlineData(0)]
     [InlineData(25)]
     [InlineData(35)]
+    [InlineData(40)]
     [InlineData(45)]
     [InlineData(100)]
     public void Constructor_WithInvalidDuration_ShouldThrow(int totalDays)

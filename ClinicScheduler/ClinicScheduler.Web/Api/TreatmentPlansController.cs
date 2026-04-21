@@ -1,6 +1,7 @@
 using ClinicScheduler.Core.Entities;
 using ClinicScheduler.Infrastructure.Data;
 using ClinicScheduler.Web.Contracts.TreatmentPlans;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,6 +10,7 @@ namespace ClinicScheduler.Web.Api;
 /// <summary>Manages treatment plan resources.</summary>
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = RoleNames.StaffOrAbove)]
 public class TreatmentPlansController : ControllerBase
 {
     private readonly ClinicDbContext _dbContext;

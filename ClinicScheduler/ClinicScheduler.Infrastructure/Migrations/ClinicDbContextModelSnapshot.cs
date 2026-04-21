@@ -211,6 +211,9 @@ namespace ClinicScheduler.Infrastructure.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
+                    b.Property<int>("DailyCapacity")
+                        .HasColumnType("integer");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
@@ -242,6 +245,9 @@ namespace ClinicScheduler.Infrastructure.Migrations
 
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("IsArchived")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsRead")
                         .HasColumnType("boolean");
@@ -346,6 +352,36 @@ namespace ClinicScheduler.Infrastructure.Migrations
                     b.ToTable("Rooms");
                 });
 
+            modelBuilder.Entity("ClinicScheduler.Core.Entities.ScheduleConflict", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("AppointmentId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("ConflictType")
+                        .HasColumnType("integer");
+
+                    b.Property<DateTime>("DetectedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<bool>("Resolved")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime?>("ResolvedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppointmentId");
+
+                    b.ToTable("ScheduleConflicts");
+                });
+
             modelBuilder.Entity("ClinicScheduler.Core.Entities.Therapist", b =>
                 {
                     b.Property<int>("Id")
@@ -369,6 +405,9 @@ namespace ClinicScheduler.Infrastructure.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("NpiNumber")
+                        .HasColumnType("text");
+
                     b.Property<string>("Phone")
                         .HasColumnType("text");
 
@@ -382,6 +421,10 @@ namespace ClinicScheduler.Infrastructure.Migrations
 
                     b.HasIndex("Email")
                         .IsUnique();
+
+                    b.HasIndex("NpiNumber")
+                        .IsUnique()
+                        .HasFilter("\"NpiNumber\" IS NOT NULL");
 
                     b.ToTable("Therapists");
                 });
@@ -418,6 +461,39 @@ namespace ClinicScheduler.Infrastructure.Migrations
                     b.ToTable("TherapyTypes");
                 });
 
+            modelBuilder.Entity("ClinicScheduler.Core.Entities.TimeSlot", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeOnly>("EndTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<int>("LocationId")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeOnly>("StartTime")
+                        .HasColumnType("time without time zone");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("LocationId");
+
+                    b.ToTable("TimeSlots");
+                });
+
             modelBuilder.Entity("ClinicScheduler.Core.Entities.TreatmentPlan", b =>
                 {
                     b.Property<int>("Id")
@@ -440,6 +516,9 @@ namespace ClinicScheduler.Infrastructure.Migrations
 
                     b.Property<DateOnly>("StartDate")
                         .HasColumnType("date");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.Property<int>("TherapistId")
                         .HasColumnType("integer");
@@ -774,6 +853,28 @@ namespace ClinicScheduler.Infrastructure.Migrations
                     b.Navigation("Location");
                 });
 
+            modelBuilder.Entity("ClinicScheduler.Core.Entities.ScheduleConflict", b =>
+                {
+                    b.HasOne("ClinicScheduler.Core.Entities.Appointment", "Appointment")
+                        .WithMany("ScheduleConflicts")
+                        .HasForeignKey("AppointmentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Appointment");
+                });
+
+            modelBuilder.Entity("ClinicScheduler.Core.Entities.TimeSlot", b =>
+                {
+                    b.HasOne("ClinicScheduler.Core.Entities.Location", "Location")
+                        .WithMany("TimeSlots")
+                        .HasForeignKey("LocationId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Location");
+                });
+
             modelBuilder.Entity("ClinicScheduler.Core.Entities.TreatmentPlan", b =>
                 {
                     b.HasOne("ClinicScheduler.Core.Entities.Patient", "Patient")
@@ -863,9 +964,16 @@ namespace ClinicScheduler.Infrastructure.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("ClinicScheduler.Core.Entities.Appointment", b =>
+                {
+                    b.Navigation("ScheduleConflicts");
+                });
+
             modelBuilder.Entity("ClinicScheduler.Core.Entities.Location", b =>
                 {
                     b.Navigation("Rooms");
+
+                    b.Navigation("TimeSlots");
                 });
 
             modelBuilder.Entity("ClinicScheduler.Core.Entities.Patient", b =>

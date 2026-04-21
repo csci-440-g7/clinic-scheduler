@@ -29,9 +29,11 @@
         <TemplateColumn Title="Actions" Sortable="false">
             <CellTemplate>
                 <MudIconButton Icon="@Icons.Material.Filled.Edit" Size="Size.Small"
+                               aria-label="Edit room"
                                OnClick="@(() => OpenEditDialog(context.Item))" />
                 <MudIconButton Icon="@Icons.Material.Filled.Delete" Size="Size.Small"
                                Color="Color.Error"
+                               aria-label="Delete room"
                                OnClick="@(() => DeleteAsync(context.Item))" />
             </CellTemplate>
         </TemplateColumn>

@@ -3,7 +3,7 @@
 @inject IRepository<Patient> PatientRepo
 @inject IRepository<Therapist> TherapistRepo
 @inject IRepository<Room> RoomRepo
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject AuthenticationStateProvider AuthStateProvider
 @inject AppointmentSchedulingService SchedulingService
 @inject ISnackbar Snackbar
@@ -25,9 +25,9 @@
         <!-- Stat cards -->
         <MudGrid>
             <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="2" Class="pa-4 rounded-lg">
+                <MudPaper Elevation="2" Class="pa-4 rounded-lg" role="region" aria-label="Appointments today">
                     <div class="d-flex align-center gap-3">
-                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Color="Color.Info" Size="Size.Large" />
+                        <MudIcon Icon="@Icons.Material.Filled.CalendarToday" Color="Color.Info" Size="Size.Large" aria-hidden="true" />
                         <div>
                             <MudText Typo="Typo.h4">@_todayCount</MudText>
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">Appointments Today</MudText>
@@ -36,9 +36,9 @@
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="2" Class="pa-4 rounded-lg">
+                <MudPaper Elevation="2" Class="pa-4 rounded-lg" role="region" aria-label="Scheduled appointments">
                     <div class="d-flex align-center gap-3">
-                        <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Color="Color.Success" Size="Size.Large" />
+                        <MudIcon Icon="@Icons.Material.Filled.EventAvailable" Color="Color.Success" Size="Size.Large" aria-hidden="true" />
                         <div>
                             <MudText Typo="Typo.h4">@_scheduledCount</MudText>
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">Scheduled</MudText>
@@ -47,9 +47,9 @@
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="2" Class="pa-4 rounded-lg">
+                <MudPaper Elevation="2" Class="pa-4 rounded-lg" role="region" aria-label="Active patients">
                     <div class="d-flex align-center gap-3">
-                        <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Large" />
+                        <MudIcon Icon="@Icons.Material.Filled.People" Color="Color.Primary" Size="Size.Large" aria-hidden="true" />
                         <div>
                             <MudText Typo="Typo.h4">@_patientCount</MudText>
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">Active Patients</MudText>
@@ -58,11 +58,11 @@
                 </MudPaper>
             </MudItem>
             <MudItem xs="12" sm="6" md="3">
-                <MudPaper Elevation="2" Class="pa-4 rounded-lg">
+                <MudPaper Elevation="2" Class="pa-4 rounded-lg" role="region" aria-label="Pending requests">
                     <div class="d-flex align-center gap-3">
                         <MudIcon Icon="@Icons.Material.Filled.Notifications"
                                  Color="@(_pendingRequests.Count > 0 ? Color.Warning : Color.Default)"
-                                 Size="Size.Large" />
+                                 Size="Size.Large" aria-hidden="true" />
                         <div>
                             <MudText Typo="Typo.h4">@_pendingRequests.Count</MudText>
                             <MudText Typo="Typo.body2" Class="mud-text-secondary">Pending Requests</MudText>
@@ -359,6 +359,7 @@
                 </MudSelect>
                 <MudTextField @bind-Value="_reqNotes" Label="Why do you need this appointment?"
                               Variant="Variant.Outlined" Lines="4" Required="true"
+                              Immediate="true"
                               Placeholder="Describe your concern, symptoms, or reason for the visit…" />
             </DialogContent>
             <DialogActions>
@@ -437,6 +438,7 @@
 
     private async Task LoadClinicDashboardAsync()
     {
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         var today = DateTime.UtcNow.Date;
         var tomorrow = today.AddDays(1);
 
@@ -463,6 +465,7 @@
 
     private async Task LoadPatientDashboardAsync(string email)
     {
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         var patient = await DbContext.Patients.FirstOrDefaultAsync(p => p.Email == email);
         if (patient is null) return;
 
@@ -495,12 +498,15 @@
 
     private async Task SubmitRequestAsync()
     {
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         var patient = await DbContext.Patients.FindAsync(_currentPatientId);
         if (patient is null) return;
 
-        Therapist? preferredTherapist = _reqTherapistId.HasValue
-            ? await TherapistRepo.GetByIdAsync(_reqTherapistId.Value)
-            : null;
+        Therapist? preferredTherapist = null;
+        if (_reqTherapistId.HasValue)
+        {
+            preferredTherapist = await DbContext.Therapists.FindAsync(_reqTherapistId.Value);
+        }
 
         // Compute preferred datetime if patient specified one
         DateTime preferredDt = DateTime.UtcNow;
@@ -551,6 +557,7 @@
 
         try
         {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             var appt = await SchedulingService.CreateAppointmentAsync(
                 _approveTarget.PatientId,
                 _approveTherapistId,
@@ -578,9 +585,10 @@
             // Slot is taken — surface to staff and auto-deny with a patient-visible reason
             _approveError = ex.Message;
 
-            var tracked = await DbContext.AppointmentRequests.FindAsync(_approveTarget.Id);
+            await using var denyDb = await DbFactory.CreateDbContextAsync();
+            var tracked = await denyDb.AppointmentRequests.FindAsync(_approveTarget.Id);
             tracked!.Deny("The requested time slot is already booked. Please submit a new request with a different time.");
-            await DbContext.SaveChangesAsync();
+            await denyDb.SaveChangesAsync();
 
             await LoadClinicDashboardAsync();
             Snackbar.Add("Conflict detected — patient has been notified that the slot is taken.", Severity.Warning);
@@ -593,6 +601,7 @@
 
     private async Task DenyRequestAsync(AppointmentRequest req, string? reason = null)
     {
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         var tracked = await DbContext.AppointmentRequests.FindAsync(req.Id);
         if (tracked is null) return;
         tracked.Deny(reason);
@@ -606,6 +615,7 @@
 
     private async Task NotifyPatientAsync(int patientId, NotificationType type, string title, string message, int? appointmentId = null)
     {
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         var patient = await DbContext.Patients.FindAsync(patientId);
         if (patient is null) return;
         var user = await DbContext.Users.FirstOrDefaultAsync(u => u.UserName == patient.Email);

@@ -1,6 +1,6 @@
 @page "/dashboard/doctor"
 @inject NavigationManager Nav
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject IRepository<Patient> PatientRepo
 @inject IRepository<Therapist> TherapistRepo
 @inject AuthenticationStateProvider AuthState
@@ -189,6 +189,7 @@
             return;
         }
 
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         _therapist = await DbContext.Therapists.FirstOrDefaultAsync(t => t.Email == email);
 
         if (_therapist is null)
@@ -197,8 +198,13 @@
             return;
         }
 
-        await LoadAppointmentNotesAsync();
-        await ApplyPatientFilterAsync();
+        _appointmentNotes = await DbContext.Appointments
+            .Include(a => a.Patient)
+            .Where(a => a.TherapistId == _therapist.Id && a.Notes != null)
+            .OrderByDescending(a => a.StartTime)
+            .ToListAsync();
+
+        _filteredPatients = await DbContext.Patients.ToListAsync();
     }
 
     protected override void OnParametersSet()
@@ -218,6 +224,7 @@
 
     private async Task ApplyPatientFilterAsync()
     {
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         var term = (patientSearchTerm ?? "").Trim();
         if (string.IsNullOrWhiteSpace(term))
         {
@@ -235,6 +242,7 @@
     {
         if (_therapist is null) return;
 
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         _appointmentNotes = await DbContext.Appointments
             .Include(a => a.Patient)
             .Where(a => a.TherapistId == _therapist.Id && a.Notes != null)

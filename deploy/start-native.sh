@@ -28,7 +28,8 @@ set +a
 
 # Pull latest code
 echo "[1/6] Pulling latest code from MVP..."
-git -C "$REPO_DIR" pull origin MVP
+git -C "$REPO_DIR" fetch origin MVP
+git -C "$REPO_DIR" reset --hard origin/MVP
 
 # Ensure PostgreSQL is running in Docker
 echo "[2/6] Starting PostgreSQL container..."

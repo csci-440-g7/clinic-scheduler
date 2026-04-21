@@ -58,8 +58,8 @@ docker-compose up --build
 
 The app will be available at `http://localhost:8081`.
 
-> **Credentials:** By default, `docker-compose` uses `devpassword` / `admin1234` as fallback values.
-> For production deployments, copy `.env.example` to `.env` and set real values before running:
+> **Credentials:** By default, `docker-compose` uses fallback values from `.env.example`.
+> For production deployments, copy `.env.example` to `.env` and set strong, unique passwords before running:
 > ```bash
 > cp .env.example .env
 > # edit .env with strong passwords
@@ -70,11 +70,13 @@ Default demo accounts (seeded on first run):
 
 | Role | Email | Password |
 |---|---|---|
-| Admin | admin@clinic.com | *(set via `SeedAdmin__Password` env var, default `admin1234` in dev)* |
-| Clinic Manager | manager@clinic.com | `Manager@1234` |
-| Therapist | therapist@clinic.com | `Therapist@1234` |
-| Staff | staff@clinic.com | `Staff@Clinic1` |
-| Patient | patient@clinic.com | `Patient@1234` |
+| Admin | admin@clinic.com | *(set via `SeedAdmin__Password` env var)* |
+| Clinic Manager | manager@clinic.com | *(set via seed configuration)* |
+| Therapist | therapist@clinic.com | *(set via seed configuration)* |
+| Staff | staff@clinic.com | *(set via seed configuration)* |
+| Patient | patient@clinic.com | *(set via seed configuration)* |
+
+> **Note:** Default demo passwords are configured in the database seeder for development only. See the seed configuration for current values. Never use demo passwords in production.
 
 ### Option 2 — Local development
 
@@ -128,7 +130,7 @@ See [TESTING.md](TESTING.md) for a full description of the testing strategy.
 
 ## Deployment
 
-**Live:** http://52.72.1.65:8081 (EC2 t3.small, us-east-1, Elastic IP)
+**Live:** Deployed on AWS EC2 (us-east-1). Contact the team for the current deployment URL.
 
 See [DEPLOYMENT_NOTES.md](DEPLOYMENT_NOTES.md) for step-by-step EC2 deployment instructions.
 
@@ -142,7 +144,7 @@ Required environment variables for production (set in `.env` on EC2 — never co
 
 To update the running EC2 deployment after pushing changes to `MVP`:
 ```bash
-ssh -i ~/clinic-capstone-key.pem ec2-user@52.72.1.65
+ssh -i <path-to-your-key>.pem ec2-user@<ec2-host>
 cd /home/ec2-user/clinic-scheduler
 git pull origin MVP
 docker-compose --env-file .env up --build -d

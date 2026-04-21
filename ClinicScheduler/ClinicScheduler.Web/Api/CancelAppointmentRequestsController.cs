@@ -1,6 +1,7 @@
 using ClinicScheduler.Core.Entities;
 using ClinicScheduler.Infrastructure.Data;
 using ClinicScheduler.Web.Contracts.CancelAppointmentRequests;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -8,6 +9,7 @@ namespace ClinicScheduler.Web.Api;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class CancelAppointmentRequestsController : ControllerBase
 {
     private readonly ClinicDbContext _dbContext;
@@ -67,11 +69,28 @@ public class CancelAppointmentRequestsController : ControllerBase
     [HttpGet]
     public async Task<ActionResult<IReadOnlyList<CancelAppointmentRequestDto>>> GetAll(CancellationToken ct)
     {
-        var requests = await _dbContext.CancelAppointmentRequests
+        var isStaffOrAbove = User.IsInRole(RoleNames.Admin)
+            || User.IsInRole(RoleNames.ClinicManager)
+            || User.IsInRole(RoleNames.Staff)
+            || User.IsInRole(RoleNames.Therapist);
+
+        if (!isStaffOrAbove && !User.IsInRole(RoleNames.Patient))
+            return Forbid();
+
+        var query = _dbContext.CancelAppointmentRequests
             .AsNoTracking()
             .Include(r => r.Patient)
             .Include(r => r.Appointment)
                 .ThenInclude(a => a.Therapist)
+            .AsQueryable();
+
+        if (User.IsInRole(RoleNames.Patient) && !isStaffOrAbove)
+        {
+            var userEmail = User.Identity?.Name;
+            query = query.Where(r => r.Patient.Email == userEmail);
+        }
+
+        var requests = await query
             .OrderByDescending(r => r.CreatedAt)
             .ToListAsync(ct);
 
@@ -79,6 +98,7 @@ public class CancelAppointmentRequestsController : ControllerBase
     }
 
     [HttpGet("{id:int}")]
+    [Authorize(Roles = RoleNames.StaffOrAbove)]
     public async Task<ActionResult<CancelAppointmentRequestDto>> GetById(int id, CancellationToken ct)
     {
         var request = await _dbContext.CancelAppointmentRequests

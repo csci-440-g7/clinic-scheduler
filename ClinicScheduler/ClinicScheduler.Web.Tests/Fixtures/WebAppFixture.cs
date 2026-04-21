@@ -1,8 +1,12 @@
 using ClinicScheduler.Infrastructure.Data;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
+using System.Security.Claims;
 using Testcontainers.PostgreSql;
 
 namespace ClinicScheduler.Web.Tests.Fixtures;
@@ -48,7 +52,32 @@ public class WebAppFixture : IAsyncLifetime
                     services.AddDbContext<ClinicDbContext>(options =>
                         options.UseNpgsql(_postgres.GetConnectionString()));
                 });
+
+                // ConfigureTestServices runs AFTER the app's Program.cs services,
+                // so it can override the Identity authentication defaults.
+                builder.ConfigureTestServices(services =>
+                {
+                    services.AddAuthentication("TestScheme")
+                        .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>("TestScheme", options => { });
+
+                    // Force all default schemes to TestScheme, overriding Identity's cookie defaults
+                    services.PostConfigure<AuthenticationOptions>(options =>
+                    {
+                        options.DefaultAuthenticateScheme = "TestScheme";
+                        options.DefaultChallengeScheme = "TestScheme";
+                        options.DefaultScheme = "TestScheme";
+                    });
+                });
             });
+
+        // Ensure the database schema is created.
+        // Program.cs calls db.Database.Migrate() which silently fails in Testing
+        // when no migration files exist. EnsureCreated() creates the schema from the model.
+        using (var scope = Factory.Services.CreateScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
+            await db.Database.EnsureCreatedAsync();
+        }
 
         Client = Factory.CreateClient();
     }
@@ -63,9 +92,11 @@ public class WebAppFixture : IAsyncLifetime
         var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
         await db.Database.ExecuteSqlRawAsync(@"
             TRUNCATE TABLE
+                ""ScheduleConflicts"",
                 ""Appointments"",
                 ""TreatmentPlanTherapies"",
                 ""TreatmentPlans"",
+                ""TimeSlots"",
                 ""Rooms"",
                 ""Locations"",
                 ""TherapyTypes"",

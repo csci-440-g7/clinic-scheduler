@@ -1,6 +1,7 @@
 using ClinicScheduler.Core.Entities;
 using ClinicScheduler.Core.Interfaces;
 using ClinicScheduler.Web.Contracts.TherapyTypes;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicScheduler.Web.Api;
@@ -8,6 +9,7 @@ namespace ClinicScheduler.Web.Api;
 /// <summary>Manages therapy type resources.</summary>
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class TherapyTypesController : ControllerBase
 {
     private readonly IRepository<TherapyType> _repository;
@@ -36,6 +38,7 @@ public class TherapyTypesController : ControllerBase
 
     /// <summary>Creates a new therapy type.</summary>
     [HttpPost]
+    [Authorize(Roles = RoleNames.AdminOrManager)]
     public async Task<ActionResult<TherapyTypeDto>> Create(CreateTherapyTypeRequest request, CancellationToken ct)
     {
         try
@@ -52,6 +55,7 @@ public class TherapyTypesController : ControllerBase
 
     /// <summary>Updates an existing therapy type.</summary>
     [HttpPut("{id:int}")]
+    [Authorize(Roles = RoleNames.AdminOrManager)]
     public async Task<IActionResult> Update(int id, UpdateTherapyTypeRequest request, CancellationToken ct)
     {
         var existing = await _repository.GetByIdAsync(id, ct);
@@ -72,6 +76,7 @@ public class TherapyTypesController : ControllerBase
 
     /// <summary>Deletes a therapy type.</summary>
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = RoleNames.AdminOrManager)]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         var type = await _repository.GetByIdAsync(id, ct);

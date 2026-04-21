@@ -1,3 +1,26 @@
+::deep .skip-nav {
+    position: absolute;
+    left: -10000px;
+    top: auto;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    z-index: 9999;
+}
+
+::deep .skip-nav:focus {
+    position: static;
+    width: auto;
+    height: auto;
+    overflow: visible;
+    padding: 0.5rem 1rem;
+    background: #1976d2;
+    color: #fff;
+    text-decoration: none;
+    font-weight: bold;
+    display: inline-block;
+}
+
 .page {
     position: relative;
     display: flex;
