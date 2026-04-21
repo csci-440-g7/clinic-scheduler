@@ -149,7 +149,7 @@
         if (_isAuthenticated && _userId is not null)
         {
             _unreadCount = await DbContext.Notifications
-                .CountAsync(n => n.UserId == _userId && !n.IsRead);
+                .CountAsync(n => n.UserId == _userId && !n.IsRead && !n.IsArchived);
         }
     }
 }

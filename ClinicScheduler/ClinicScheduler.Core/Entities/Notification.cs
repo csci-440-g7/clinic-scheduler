@@ -23,6 +23,7 @@ public class Notification
     public string Message { get; private set; } = null!;
     public NotificationType Type { get; private set; }
     public bool IsRead { get; private set; }
+    public bool IsArchived { get; private set; }
     public DateTime CreatedAt { get; private set; }
     public int? RelatedAppointmentId { get; private set; }
 
@@ -35,9 +36,12 @@ public class Notification
         Title = title;
         Message = message;
         IsRead = false;
+        IsArchived = false;
         CreatedAt = DateTime.UtcNow;
         RelatedAppointmentId = relatedAppointmentId;
     }
 
     public void MarkRead() => IsRead = true;
+    public void Archive() => IsArchived = true;
+    public void Unarchive() => IsArchived = false;
 }

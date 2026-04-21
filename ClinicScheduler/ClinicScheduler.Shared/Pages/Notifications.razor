@@ -8,14 +8,24 @@
 
 <div class="d-flex align-center justify-space-between mb-4">
     <MudText Typo="Typo.h5">Notifications</MudText>
-    @if (_notifications.Any(n => !n.IsRead))
-    {
-        <MudButton Variant="Variant.Outlined" Size="Size.Small"
-                   StartIcon="@Icons.Material.Filled.DoneAll"
-                   OnClick="MarkAllReadAsync">
-            Mark All Read
-        </MudButton>
-    }
+    <div class="d-flex gap-2">
+        @if (_notifications.Any(n => !n.IsRead))
+        {
+            <MudButton Variant="Variant.Outlined" Size="Size.Small"
+                       StartIcon="@Icons.Material.Filled.DoneAll"
+                       OnClick="MarkAllReadAsync">
+                Mark All Read
+            </MudButton>
+        }
+        @if (_notifications.Count > 0)
+        {
+            <MudButton Variant="Variant.Outlined" Size="Size.Small" Color="Color.Warning"
+                       StartIcon="@Icons.Material.Filled.Archive"
+                       OnClick="ArchiveAllAsync">
+                Clear All
+            </MudButton>
+        }
+    </div>
 </div>
 
 @if (_loading)
@@ -28,6 +38,13 @@ else if (_notifications.Count == 0)
         <MudIcon Icon="@Icons.Material.Filled.NotificationsNone" Size="Size.Large" Class="mud-text-secondary mb-3" />
         <MudText Typo="Typo.h6" Class="mud-text-secondary">No notifications</MudText>
         <MudText Typo="Typo.body2" Class="mud-text-secondary">You're all caught up.</MudText>
+        @if (_archivedCount > 0)
+        {
+            <MudButton Variant="Variant.Text" Size="Size.Small" Class="mt-3"
+                       OnClick="ToggleShowArchived">
+                @(_showArchived ? "Hide" : "Show") @_archivedCount archived
+            </MudButton>
+        }
     </MudPaper>
 }
 else
@@ -53,33 +70,68 @@ else
                         </MudText>
                     </div>
                     <MudText Typo="Typo.body2">@notification.Message</MudText>
-                    @if (notification.Type == NotificationType.AppointmentCreated
-                        || notification.Type == NotificationType.AppointmentRescheduled
-                        || notification.Type == NotificationType.AppointmentUpdated)
-                    {
-                        <MudButton Variant="Variant.Text" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.Event"
-                                   OnClick="@(() => Nav.NavigateTo("/calendar"))">
-                            View Appointment
-                        </MudButton>
-                    }
-                    else if (notification.Type == NotificationType.CancellationApproved)
-                    {
-                        <MudButton Variant="Variant.Text" Size="Size.Small"
-                                   StartIcon="@Icons.Material.Filled.AddCircle"
-                                   OnClick="@(() => Nav.NavigateTo("/calendar"))">
-                            Request New Appointment
-                        </MudButton>
-                    }
-                    else if (notification.RelatedAppointmentId.HasValue)
-                    {
-                        <MudLink Href="/calendar" Typo="Typo.caption">View Calendar</MudLink>
-                    }
+                    <div class="d-flex align-center gap-2 mt-1">
+                        @if (notification.Type == NotificationType.AppointmentCreated
+                            || notification.Type == NotificationType.AppointmentRescheduled
+                            || notification.Type == NotificationType.AppointmentUpdated)
+                        {
+                            <MudButton Variant="Variant.Text" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.Event"
+                                       OnClick="@(() => Nav.NavigateTo("/calendar"))">
+                                View Appointment
+                            </MudButton>
+                        }
+                        else if (notification.Type == NotificationType.CancellationApproved)
+                        {
+                            <MudButton Variant="Variant.Text" Size="Size.Small"
+                                       StartIcon="@Icons.Material.Filled.AddCircle"
+                                       OnClick="@(() => Nav.NavigateTo("/calendar"))">
+                                Request New Appointment
+                            </MudButton>
+                        }
+                        else if (notification.RelatedAppointmentId.HasValue)
+                        {
+                            <MudLink Href="/calendar" Typo="Typo.caption">View Calendar</MudLink>
+                        }
+                        <MudIconButton Icon="@Icons.Material.Filled.Close" Size="Size.Small"
+                                       aria-label="Dismiss notification"
+                                       OnClick="@(() => ArchiveOneAsync(notification))" />
+                    </div>
                 </div>
                 @if (!notification.IsRead)
                 {
                     <div style="width:8px; height:8px; border-radius:50%; background:#1976D2; flex-shrink:0; margin-top:6px;"></div>
                 }
+            </div>
+        }
+    </MudPaper>
+
+    @if (_archivedCount > 0)
+    {
+        <div class="d-flex justify-center mt-3">
+            <MudButton Variant="Variant.Text" Size="Size.Small"
+                       OnClick="ToggleShowArchived">
+                @(_showArchived ? "Hide" : "Show") @_archivedCount archived
+            </MudButton>
+        </div>
+    }
+}
+
+@if (_showArchived && _archivedNotifications.Count > 0)
+{
+    <MudText Typo="Typo.h6" Class="mt-4 mb-2 mud-text-secondary">Archived</MudText>
+    <MudPaper Elevation="0" Style="opacity:0.6;">
+        @foreach (var notification in _archivedNotifications)
+        {
+            <div style="border-bottom:1px solid #f0f0f0; padding:12px;"
+                 class="d-flex align-start gap-3">
+                <MudIcon Icon="@TypeIcon(notification.Type)"
+                         Color="Color.Default" Size="Size.Small"
+                         Style="margin-top:2px; flex-shrink:0;" />
+                <div style="flex:1;">
+                    <MudText Typo="Typo.body2">@notification.Title — @notification.Message</MudText>
+                    <MudText Typo="Typo.caption" Class="mud-text-secondary">@TimeAgo(notification.CreatedAt)</MudText>
+                </div>
             </div>
         }
     </MudPaper>
@@ -89,6 +141,9 @@ else
     private bool _loading = true;
     private string? _userId;
     private List<Notification> _notifications = [];
+    private List<Notification> _archivedNotifications = [];
+    private int _archivedCount;
+    private bool _showArchived;
 
     protected override async Task OnInitializedAsync()
     {
@@ -116,9 +171,11 @@ else
     {
         _loading = true;
         _notifications = await DbContext.Notifications
-            .Where(n => n.UserId == _userId)
+            .Where(n => n.UserId == _userId && !n.IsArchived)
             .OrderByDescending(n => n.CreatedAt)
             .ToListAsync();
+        _archivedCount = await DbContext.Notifications
+            .CountAsync(n => n.UserId == _userId && n.IsArchived);
         _loading = false;
     }
 
@@ -128,6 +185,41 @@ else
         foreach (var n in unread) n.MarkRead();
         await DbContext.SaveChangesAsync();
         StateHasChanged();
+    }
+
+    private async Task ArchiveOneAsync(Notification notification)
+    {
+        notification.Archive();
+        await DbContext.SaveChangesAsync();
+        _notifications.Remove(notification);
+        _archivedCount++;
+        StateHasChanged();
+    }
+
+    private async Task ArchiveAllAsync()
+    {
+        foreach (var n in _notifications) n.Archive();
+        await DbContext.SaveChangesAsync();
+        _archivedCount += _notifications.Count;
+        _notifications.Clear();
+        StateHasChanged();
+    }
+
+    private async Task ToggleShowArchived()
+    {
+        _showArchived = !_showArchived;
+        if (_showArchived)
+        {
+            _archivedNotifications = await DbContext.Notifications
+                .Where(n => n.UserId == _userId && n.IsArchived)
+                .OrderByDescending(n => n.CreatedAt)
+                .Take(50)
+                .ToListAsync();
+        }
+        else
+        {
+            _archivedNotifications.Clear();
+        }
     }
 
     private string TypeIcon(NotificationType type) => type switch
