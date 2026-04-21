@@ -10,7 +10,9 @@ public enum NotificationType
     AppointmentRescheduled,
     CancellationRequested,
     CancellationApproved,
-    CancellationDenied
+    CancellationDenied,
+    AppointmentCreated,
+    AppointmentUpdated
 }
 
 public class Notification

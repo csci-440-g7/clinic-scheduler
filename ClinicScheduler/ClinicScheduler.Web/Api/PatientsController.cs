@@ -1,6 +1,7 @@
 using ClinicScheduler.Core.Entities;
 using ClinicScheduler.Core.Interfaces;
 using ClinicScheduler.Web.Contracts.Patients;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicScheduler.Web.Api;
@@ -8,6 +9,7 @@ namespace ClinicScheduler.Web.Api;
 /// <summary>Manages patient resources.</summary>
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class PatientsController : ControllerBase
 {
     private readonly IRepository<Patient> _repository;
@@ -20,6 +22,7 @@ public class PatientsController : ControllerBase
 
     /// <summary>Returns all patients.</summary>
     [HttpGet]
+    [Authorize(Roles = RoleNames.StaffOrAbove)]
     public async Task<ActionResult<IReadOnlyList<PatientDto>>> GetAll(CancellationToken ct)
     {
         var patients = await _repository.GetAllAsync(ct);
@@ -31,11 +34,26 @@ public class PatientsController : ControllerBase
     public async Task<ActionResult<PatientDto>> GetById(int id, CancellationToken ct)
     {
         var patient = await _repository.GetByIdAsync(id, ct);
-        return patient is null ? NotFound() : Ok(MapToDto(patient));
+        if (patient is null) return NotFound();
+
+        // Staff_Or_Above get full access; Patient role gets owner-access only
+        if (User.IsInRole(RoleNames.Patient)
+            && !User.IsInRole(RoleNames.Admin)
+            && !User.IsInRole(RoleNames.ClinicManager)
+            && !User.IsInRole(RoleNames.Staff)
+            && !User.IsInRole(RoleNames.Therapist))
+        {
+            var userEmail = User.Identity?.Name;
+            if (!string.Equals(patient.Email, userEmail, StringComparison.OrdinalIgnoreCase))
+                return Forbid();
+        }
+
+        return Ok(MapToDto(patient));
     }
 
     /// <summary>Creates a new patient record.</summary>
     [HttpPost]
+    [Authorize(Roles = RoleNames.StaffOrAbove)]
     public async Task<ActionResult<PatientDto>> Create(CreatePatientRequest request, CancellationToken ct)
     {
         var patient = new Patient(request.FirstName, request.LastName, request.Email, request.DateOfBirth, request.Phone);
@@ -45,6 +63,7 @@ public class PatientsController : ControllerBase
 
     /// <summary>Updates a patient's personal and contact information.</summary>
     [HttpPut("{id:int}")]
+    [Authorize(Roles = RoleNames.StaffOrAbove)]
     public async Task<IActionResult> Update(int id, UpdatePatientRequest request, CancellationToken ct)
     {
         var existing = await _repository.GetByIdAsync(id, ct);
@@ -59,6 +78,7 @@ public class PatientsController : ControllerBase
 
     /// <summary>Deletes a patient record.</summary>
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = RoleNames.StaffOrAbove)]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         var patient = await _repository.GetByIdAsync(id, ct);

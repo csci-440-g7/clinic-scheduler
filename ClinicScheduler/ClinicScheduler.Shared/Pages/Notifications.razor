@@ -53,7 +53,25 @@ else
                         </MudText>
                     </div>
                     <MudText Typo="Typo.body2">@notification.Message</MudText>
-                    @if (notification.RelatedAppointmentId.HasValue)
+                    @if (notification.Type == NotificationType.AppointmentCreated
+                        || notification.Type == NotificationType.AppointmentRescheduled
+                        || notification.Type == NotificationType.AppointmentUpdated)
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.Event"
+                                   OnClick="@(() => Nav.NavigateTo("/schedule"))">
+                            View Appointment
+                        </MudButton>
+                    }
+                    else if (notification.Type == NotificationType.CancellationApproved)
+                    {
+                        <MudButton Variant="Variant.Text" Size="Size.Small"
+                                   StartIcon="@Icons.Material.Filled.AddCircle"
+                                   OnClick="@(() => Nav.NavigateTo("/appointment-request"))">
+                            Request New Appointment
+                        </MudButton>
+                    }
+                    else if (notification.RelatedAppointmentId.HasValue)
                     {
                         <MudLink Href="/schedule" Typo="Typo.caption">View Schedule</MudLink>
                     }
@@ -123,6 +141,8 @@ else
         NotificationType.CancellationRequested  => Icons.Material.Filled.EventBusy,
         NotificationType.CancellationApproved   => Icons.Material.Filled.CheckCircle,
         NotificationType.CancellationDenied     => Icons.Material.Filled.Cancel,
+        NotificationType.AppointmentCreated     => Icons.Material.Filled.EventAvailable,
+        NotificationType.AppointmentUpdated     => Icons.Material.Filled.Edit,
         _                                       => Icons.Material.Filled.Notifications
     };
 
@@ -137,6 +157,8 @@ else
         NotificationType.CancellationRequested  => Color.Warning,
         NotificationType.CancellationApproved   => Color.Success,
         NotificationType.CancellationDenied     => Color.Error,
+        NotificationType.AppointmentCreated     => Color.Success,
+        NotificationType.AppointmentUpdated     => Color.Info,
         _                                       => Color.Default
     };
 

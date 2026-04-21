@@ -1,6 +1,7 @@
 using ClinicScheduler.Core.Entities;
 using ClinicScheduler.Core.Interfaces;
 using ClinicScheduler.Web.Contracts.Rooms;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicScheduler.Web.Api;
@@ -8,6 +9,7 @@ namespace ClinicScheduler.Web.Api;
 /// <summary>Manages treatment room resources.</summary>
 [ApiController]
 [Route("api/[controller]")]
+[Authorize]
 public class RoomsController : ControllerBase
 {
     private readonly IRepository<Room> _roomRepository;
@@ -58,6 +60,7 @@ public class RoomsController : ControllerBase
 
     /// <summary>Creates a new room within the specified location.</summary>
     [HttpPost]
+    [Authorize(Roles = RoleNames.AdminOrManager)]
     public async Task<ActionResult<RoomDto>> Create(CreateRoomRequest request, CancellationToken ct)
     {
         var location = await _locationRepository.GetByIdAsync(request.LocationId, ct);
@@ -72,6 +75,7 @@ public class RoomsController : ControllerBase
 
     /// <summary>Updates a room's name, capacity, and description.</summary>
     [HttpPut("{id:int}")]
+    [Authorize(Roles = RoleNames.AdminOrManager)]
     public async Task<IActionResult> Update(int id, UpdateRoomRequest request, CancellationToken ct)
     {
         var existing = await _roomRepository.GetByIdAsync(id, ct);
@@ -85,6 +89,7 @@ public class RoomsController : ControllerBase
 
     /// <summary>Deletes a room.</summary>
     [HttpDelete("{id:int}")]
+    [Authorize(Roles = RoleNames.AdminOrManager)]
     public async Task<IActionResult> Delete(int id, CancellationToken ct)
     {
         var room = await _roomRepository.GetByIdAsync(id, ct);

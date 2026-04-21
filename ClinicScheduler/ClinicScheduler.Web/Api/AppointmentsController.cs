@@ -2,6 +2,8 @@ using ClinicScheduler.Core.Entities;
 using ClinicScheduler.Core.Services;
 using ClinicScheduler.Infrastructure.Data;
 using ClinicScheduler.Web.Contracts.Appointments;
+using ClinicScheduler.Web.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -9,20 +11,24 @@ namespace ClinicScheduler.Web.Api;
 
 [ApiController]
 [Route("api/[controller]")]
+[Authorize(Roles = RoleNames.StaffOrAbove)]
 public class AppointmentsController : ControllerBase
 {
     private readonly ClinicDbContext _dbContext;
     private readonly AppointmentSchedulingService _schedulingService;
     private readonly MissedAppointmentService _missedAppointmentService;
+    private readonly AppointmentNotificationService _notificationService;
 
     public AppointmentsController(
         ClinicDbContext dbContext,
         AppointmentSchedulingService schedulingService,
-        MissedAppointmentService missedAppointmentService)
+        MissedAppointmentService missedAppointmentService,
+        AppointmentNotificationService notificationService)
     {
         _dbContext = dbContext;
         _schedulingService = schedulingService;
         _missedAppointmentService = missedAppointmentService;
+        _notificationService = notificationService;
     }
 
     [HttpGet]
@@ -81,6 +87,8 @@ public class AppointmentsController : ControllerBase
                 .Include(x => x.Room)
                 .FirstAsync(x => x.Id == appointment.Id, ct);
 
+            await _notificationService.NotifyAppointmentCreatedAsync(created, ct);
+
             return CreatedAtAction(nameof(GetById), new { id = created.Id }, MapToDto(created));
         }
         catch (ArgumentException ex)
@@ -98,6 +106,13 @@ public class AppointmentsController : ControllerBase
     {
         var existing = await _dbContext.Appointments.FirstOrDefaultAsync(x => x.Id == id, ct);
         if (existing is null) return NotFound();
+
+        // Capture original values before applying changes
+        var originalStartTime = existing.StartTime;
+        var originalEndTime = existing.EndTime;
+        var originalStatus = existing.Status;
+        var originalNotes = existing.Notes;
+        var originalTreatmentPlanId = existing.TreatmentPlanId;
 
         try
         {
@@ -128,6 +143,57 @@ public class AppointmentsController : ControllerBase
         existing.Notes = request.Notes;
 
         await _dbContext.SaveChangesAsync(ct);
+
+        // Send appropriate notification after successful save
+        var timeChanged = originalStartTime != existing.StartTime;
+        var cancelledNow = existing.Status == AppointmentStatus.Canceled && originalStatus != AppointmentStatus.Canceled;
+
+        if (timeChanged)
+        {
+            // Reload with navigation properties for the notification service
+            var loaded = await _dbContext.Appointments
+                .Include(x => x.Patient)
+                .Include(x => x.Therapist)
+                .Include(x => x.Room)
+                .FirstAsync(x => x.Id == existing.Id, ct);
+
+            await _notificationService.NotifyAppointmentRescheduledAsync(
+                loaded, originalStartTime, originalEndTime, ct);
+        }
+        else if (cancelledNow)
+        {
+            var loaded = await _dbContext.Appointments
+                .Include(x => x.Patient)
+                .Include(x => x.Therapist)
+                .Include(x => x.Room)
+                .FirstAsync(x => x.Id == existing.Id, ct);
+
+            await _notificationService.NotifyAppointmentCancelledAsync(loaded, ct);
+        }
+        else
+        {
+            // Check for other detail changes (notes, treatment plan)
+            var changes = new List<string>();
+
+            if (originalNotes != existing.Notes)
+                changes.Add("Notes updated");
+
+            if (originalTreatmentPlanId != existing.TreatmentPlanId)
+                changes.Add("Treatment plan changed");
+
+            if (changes.Count > 0)
+            {
+                var loaded = await _dbContext.Appointments
+                    .Include(x => x.Patient)
+                    .Include(x => x.Therapist)
+                    .Include(x => x.Room)
+                    .FirstAsync(x => x.Id == existing.Id, ct);
+
+                var changeDescription = string.Join(", ", changes);
+                await _notificationService.NotifyAppointmentUpdatedAsync(loaded, changeDescription, ct);
+            }
+        }
+
         return NoContent();
     }
 

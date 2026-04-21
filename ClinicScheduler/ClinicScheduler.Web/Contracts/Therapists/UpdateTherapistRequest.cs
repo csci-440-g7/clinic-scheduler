@@ -11,20 +11,23 @@ public sealed class UpdateTherapistRequest
     /// The therapist's updated first name.
     /// </summary>
     /// <example>John</example>
-    [StringLength(100)]
+    [Required]
+    [StringLength(100, MinimumLength = 1)]
     public string FirstName { get; init; } = string.Empty;
     
     /// <summary>
     /// The therapist's updated last name.
     /// </summary>
     /// <example>Doe</example>
-    [StringLength(100)]
+    [Required]
+    [StringLength(100, MinimumLength = 1)]
     public string LastName { get; init; } = string.Empty;
 
     /// <summary>
     /// The therapist's updated email address.
     /// </summary>
     /// <example>john.doe@example.com</example>
+    [Required]
     [EmailAddress]
     [StringLength(255)]
     public string Email { get; init; } = string.Empty;
