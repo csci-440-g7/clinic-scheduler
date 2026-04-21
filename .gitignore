@@ -9,7 +9,8 @@ obj/
 *.user
 *.suo
 .vscode/
+.claude/
 
 # OS files
 .DS_Store
-Thumbs.db.claude/
+Thumbs.db
