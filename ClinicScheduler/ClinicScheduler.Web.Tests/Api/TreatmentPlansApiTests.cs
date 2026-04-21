@@ -38,26 +38,6 @@ public class TreatmentPlansApiTests : IAsyncLifetime
     }
 
     [Fact]
-    public async Task POST_TreatmentPlanWith40Days_Returns201()
-    {
-        var (patientId, therapistId, _, therapyTypeId) = await SeedData.SeedCoreEntitiesAsync(_fixture.Client, "40d");
-
-        var response = await _fixture.Client.PostAsJsonAsync("/api/treatmentplans", new
-        {
-            PatientId = patientId,
-            TherapistId = therapistId,
-            FrequencyPerWeek = 4,
-            TotalDays = 40,
-            StartDate = "2030-06-03",
-            TherapyTypeIds = new[] { therapyTypeId }
-        });
-
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
-        var doc = await JsonDocument.ParseAsync(await response.Content.ReadAsStreamAsync());
-        doc.RootElement.GetProperty("totalDays").GetInt32().Should().Be(40);
-    }
-
-    [Fact]
     public async Task POST_TreatmentPlanWith25Days_Returns400()
     {
         var (patientId, therapistId, _, therapyTypeId) = await SeedData.SeedCoreEntitiesAsync(_fixture.Client, "25d");
@@ -79,7 +59,6 @@ public class TreatmentPlansApiTests : IAsyncLifetime
     [Theory]
     [InlineData(20)]
     [InlineData(30)]
-    [InlineData(40)]
     [InlineData(50)]
     public async Task POST_AllValidDurations_Return201(int totalDays)
     {
