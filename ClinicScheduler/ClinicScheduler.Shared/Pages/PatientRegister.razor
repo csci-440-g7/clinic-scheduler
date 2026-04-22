@@ -1,6 +1,7 @@
 @page "/register"
 @attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
 @inject UserManager<AppUser> UserManager
 @inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject NavigationManager Nav
@@ -106,8 +107,10 @@
         _saving = true;
         try
         {
-            // Check if email already exists
-            var existingUser = await UserManager.FindByEmailAsync(_email);
+            var trimmedEmail = _email.Trim();
+
+            // Check if email already exists in Identity
+            var existingUser = await UserManager.FindByEmailAsync(trimmedEmail);
             if (existingUser is not null)
             {
                 _errorMessage = "An account with this email already exists.";
@@ -115,19 +118,22 @@
                 return;
             }
 
-            // Create the Patient domain entity
+            // Check if email already exists in Patients table
             await using var DbContext = await DbFactory.CreateDbContextAsync();
-            var dob = DateOnly.FromDateTime(_dob.Value.Date);
-            var patient = new Patient(_firstName.Trim(), _lastName.Trim(), _email.Trim(), dob,
-                string.IsNullOrWhiteSpace(_phone) ? null : _phone.Trim());
-            DbContext.Patients.Add(patient);
-            await DbContext.SaveChangesAsync();
+            var existingPatient = await DbContext.Patients
+                .AnyAsync(p => p.Email == trimmedEmail);
+            if (existingPatient)
+            {
+                _errorMessage = "An account with this email already exists.";
+                _saving = false;
+                return;
+            }
 
-            // Create the Identity user
+            // Create the Identity user first — if password policy fails, no orphaned Patient is left
             var appUser = new AppUser
             {
-                UserName = _email.Trim(),
-                Email = _email.Trim(),
+                UserName = trimmedEmail,
+                Email = trimmedEmail,
                 DisplayName = $"{_firstName.Trim()} {_lastName.Trim()}",
                 EmailConfirmed = true
             };
@@ -140,6 +146,13 @@
             }
 
             await UserManager.AddToRoleAsync(appUser, "Patient");
+
+            // Create the Patient domain entity after Identity user succeeds
+            var dob = DateOnly.FromDateTime(_dob.Value.Date);
+            var patient = new Patient(_firstName.Trim(), _lastName.Trim(), trimmedEmail, dob,
+                string.IsNullOrWhiteSpace(_phone) ? null : _phone.Trim());
+            DbContext.Patients.Add(patient);
+            await DbContext.SaveChangesAsync();
 
             _success = true;
             StateHasChanged();
