@@ -120,3 +120,20 @@
     border-radius: 0.625rem;
     line-height: 1;
 }
+
+.nav-item ::deep form {
+    margin: 0;
+    padding: 0;
+}
+
+.nav-item ::deep button.nav-link {
+    width: 100%;
+    background: transparent;
+    border: none;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    text-align: start;
+    justify-content: flex-start;
+    color: inherit;
+}
