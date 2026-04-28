@@ -21,14 +21,19 @@ jobs:
         run: |
           dotnet restore ClinicScheduler/ClinicScheduler.Web/ClinicScheduler.Web.csproj
           dotnet restore ClinicScheduler/ClinicScheduler.Core.Tests/ClinicScheduler.Core.Tests.csproj
+          dotnet restore ClinicScheduler/ClinicScheduler.Web.Tests/ClinicScheduler.Web.Tests.csproj
 
       - name: Build
         run: |
           dotnet build ClinicScheduler/ClinicScheduler.Web/ClinicScheduler.Web.csproj -c Release --no-restore
           dotnet build ClinicScheduler/ClinicScheduler.Core.Tests/ClinicScheduler.Core.Tests.csproj -c Release --no-restore
+          dotnet build ClinicScheduler/ClinicScheduler.Web.Tests/ClinicScheduler.Web.Tests.csproj -c Release --no-restore
 
       - name: Run unit tests
         run: dotnet test ClinicScheduler/ClinicScheduler.Core.Tests -c Release --no-build --verbosity normal
+
+      - name: Run integration tests
+        run: dotnet test ClinicScheduler/ClinicScheduler.Web.Tests -c Release --no-build --verbosity normal
 
   deploy:
     needs: build-and-test

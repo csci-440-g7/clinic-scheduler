@@ -25,10 +25,12 @@ public static class DatabaseSeeder
         // Demo accounts — development only
         if (isDevelopment)
         {
-            await EnsureUser(userManager, "manager@clinic.com",        "Clinic Manager",  "Manager@1234",   "ClinicManager");
-            await EnsureUser(userManager, "therapist@clinic.com",      "Demo Therapist",  "Therapist@1234", "Therapist");
-            await EnsureUser(userManager, "staff@clinic.com",          "Staff Member",    "Staff@Clinic1",  "Staff");
-            await EnsureUser(userManager, "patient@clinic.com",        "Demo Patient",    "Patient@1234",   "Patient");
+            await EnsureUser(userManager, "manager@clinic.com",            "Clinic Manager",  "Manager@1234",   "ClinicManager");
+            await EnsureUser(userManager, "sarah.mitchell@clinic.com",     "Sarah Mitchell",  "Therapist@1234", "Therapist");
+            await EnsureUser(userManager, "james.okafor@clinic.com",       "James Okafor",    "Therapist@1234", "Therapist");
+            await EnsureUser(userManager, "linda.nguyen@clinic.com",       "Linda Nguyen",    "Therapist@1234", "Therapist");
+            await EnsureUser(userManager, "staff@clinic.com",              "Staff Member",    "Staff@Clinic1",  "Staff");
+            await EnsureUser(userManager, "patient@clinic.com",            "Demo Patient",    "Patient@1234",   "Patient");
         }
 
         static async Task EnsureUser(UserManager<AppUser> um, string email, string displayName, string password, string role)
