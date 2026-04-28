@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "Admin,ClinicManager,Staff,Therapist")]
 @inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject ISnackbar Snackbar
+@inject NavigationManager Nav
 
 <div class="patients-shell">
     <div class="patients-header">
@@ -148,11 +149,11 @@
         _filtered = string.IsNullOrWhiteSpace(t)
             ? await db.Patients.ToListAsync()
             : await db.Patients
-                .Where(p => p.FirstName.Contains(t) || p.LastName.Contains(t))
+                .Where(p => EF.Functions.ILike(p.FirstName, $"%{t}%") || EF.Functions.ILike(p.LastName, $"%{t}%"))
                 .ToListAsync();
     }
 
-    private void OpenDetail(Patient p) => _detail = p;
+    private void OpenDetail(Patient p) => Nav.NavigateTo($"/patients/{p.Id}/profile");
     private void CloseDetail() => _detail = null;
 
     private void OpenAddForm()
