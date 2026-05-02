@@ -61,7 +61,9 @@ public class MissedAppointmentService
 
     private async Task<Appointment> FindAndBookNextSlotAsync(Appointment missed, CancellationToken ct)
     {
-        var searchStart = missed.StartTime.Date.AddDays(1);
+        // Always reschedule at least 7 days from now so the patient has
+        // reasonable notice and we never book into the past.
+        var searchStart = DateTime.UtcNow.Date.AddDays(7);
 
         for (var day = 0; day < 60; day++)
         {
