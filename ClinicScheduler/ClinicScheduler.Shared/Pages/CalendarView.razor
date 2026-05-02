@@ -211,39 +211,40 @@
         _ => ""
     };
 
-    private static string ApptTitle(Appointment a) =>
-        a.TherapyType?.Name ?? a.Status.ToString();
+    private static string ApptTitle(Appointment a)
+    {
+        if (a.Status is AppointmentStatus.Missed)
+            return "Missed";
+        return a.TherapyType?.Name ?? a.Status.ToString();
+    }
 
     private static string ApptCss(Appointment a)
     {
-        // Always use a per-patient color so each patient is visually distinct on the calendar
-        return ""; // color is applied via inline style in ApptStyle
-    }
+        // Always use status-based styling for non-active statuses
+        if (a.Status is AppointmentStatus.Missed)
+            return "appt-intake";
+        if (a.Status is AppointmentStatus.Canceled)
+            return "appt-admin";
+        if (a.Status is AppointmentStatus.Completed)
+            return "appt-lab";
 
-    /// <summary>
-    /// Deterministic color palette for per-patient coloring.
-    /// Each patient gets a consistent color based on their ID.
-    /// </summary>
-    private static readonly string[] PatientColors =
-    [
-        "#2563eb", // blue
-        "#16a34a", // green
-        "#f97316", // orange
-        "#6d28d9", // purple
-        "#dc2626", // red
-        "#0891b2", // cyan
-        "#c026d3", // fuchsia
-        "#ca8a04", // amber
-        "#4f46e5", // indigo
-        "#059669", // emerald
-        "#e11d48", // rose
-        "#7c3aed", // violet
-    ];
+        // Use TherapyType color code if available for active appointments
+        if (a.TherapyType is not null)
+        {
+            var name = a.TherapyType.Name.ToLowerInvariant();
+            if (name.Contains("medical") || name.Contains("therapy")) return "appt-medical";
+            if (name.Contains("lab")) return "appt-lab";
+            if (name.Contains("intake") || name.Contains("assessment")) return "appt-intake";
+            if (name.Contains("admin")) return "appt-admin";
+        }
 
-    private static string GetPatientColor(Appointment a)
-    {
-        var index = Math.Abs(a.PatientId) % PatientColors.Length;
-        return PatientColors[index];
+        // Fall back to status-based styling
+        return a.Status switch
+        {
+            AppointmentStatus.Scheduled => "appt-medical",
+            AppointmentStatus.Rescheduled => "appt-default",
+            _ => "appt-default"
+        };
     }
 
     private static string FormatHour(int h) => DateTime.Today.AddHours(h).ToString("h:mm tt");
@@ -257,7 +258,6 @@
         var visEnd = Math.Min(endMin, EndHour * 60);
         var top = (visStart - StartHour * 60) / 60d * HourHeightPx;
         var height = Math.Max((visEnd - visStart) / 60d * HourHeightPx, 18);
-        var bgColor = GetPatientColor(a);
-        return $"top:{top:0}px; height:{height:0}px; background:{bgColor};";
+        return $"top:{top:0}px; height:{height:0}px;";
     }
 }
