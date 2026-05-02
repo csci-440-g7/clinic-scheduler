@@ -1,5 +1,5 @@
 ﻿@inject AuthenticationStateProvider AuthState
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 
 <div class="top-row ps-3 navbar navbar-dark">
     <div class="container-fluid">
@@ -17,11 +17,11 @@
             </NavLink>
         </div>
 
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="calendar">
-                <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Calendar
-            </NavLink>
-        </div>
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="calendar">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> My Calendar
+                </NavLink>
+            </div>
 
         @if (_isStaffOrAbove)
         {
@@ -55,6 +55,12 @@
             <div class="nav-item px-3">
                 <NavLink class="nav-link" href="rooms">
                     <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Rooms
+                </NavLink>
+            </div>
+
+            <div class="nav-item px-3">
+                <NavLink class="nav-link" href="locations">
+                    <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Locations
                 </NavLink>
             </div>
 
@@ -98,8 +104,8 @@
                 </NavLink>
             </div>
 
-            <div class="nav-item px-3 mt-3" style="border-top: 1px solid rgba(255,255,255,0.2); padding-top: 12px;">
-                <span class="nav-link" style="color: rgba(255,255,255,0.7); font-size: 0.85rem;">
+            <div class="nav-item px-3 mt-3" style="border-top: 1px solid rgba(0,0,0,0.15); padding-top: 12px;">
+                <span class="nav-link" style="color: #374151; font-size: 0.85rem; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="@_userEmail">
                     @_userEmail
                 </span>
             </div>
@@ -107,8 +113,8 @@
             <div class="nav-item px-3">
                 <form method="post" action="/account/logout">
                     <AntiforgeryToken />
-                    <button type="submit" class="nav-link" style="background:none; border:none; cursor:pointer; width:100%; text-align:left; color:rgba(255,255,255,0.7);">
-                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Sign Out
+                    <button type="submit" class="nav-link">
+                        <span class="bi bi-list-nested-nav-menu" aria-hidden="true"></span> Logout
                     </button>
                 </form>
             </div>
@@ -142,8 +148,9 @@
 
         if (_isAuthenticated && _userId is not null)
         {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             _unreadCount = await DbContext.Notifications
-                .CountAsync(n => n.UserId == _userId && !n.IsRead);
+                .CountAsync(n => n.UserId == _userId && !n.IsRead && !n.IsArchived);
         }
     }
 }

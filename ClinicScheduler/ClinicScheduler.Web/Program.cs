@@ -158,7 +158,7 @@ if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
             var adminPassword = app.Configuration["SeedAdmin:Password"]
                 ?? throw new InvalidOperationException("SeedAdmin:Password is not configured.");
-            await DatabaseSeeder.SeedAsync(db, userManager, roleManager, adminPassword);
+            await DatabaseSeeder.SeedAsync(db, userManager, roleManager, adminPassword, isDevelopment: true);
         }
         catch (Exception ex)
         {
@@ -177,7 +177,7 @@ else
             ?? throw new InvalidOperationException(
                 "SeedAdmin:Password must be set via environment variable (SeedAdmin__Password) in production.");
         db.Database.Migrate();
-        await DatabaseSeeder.SeedAsync(db, userManager, roleManager, adminPassword);
+        await DatabaseSeeder.SeedAsync(db, userManager, roleManager, adminPassword, isDevelopment: false);
     }
 }
 

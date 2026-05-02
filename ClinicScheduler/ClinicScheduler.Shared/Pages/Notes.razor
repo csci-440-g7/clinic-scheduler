@@ -1,6 +1,6 @@
 @page "/notes"
 @using ClinicScheduler.Shared.Pages
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 
 <div class="notes-shell">
     <h1>Clinical Notes</h1>
@@ -99,6 +99,7 @@
 
         try
         {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             _appointments = await DbContext.Appointments
                 .Include(a => a.Patient)
                 .Include(a => a.Therapist)

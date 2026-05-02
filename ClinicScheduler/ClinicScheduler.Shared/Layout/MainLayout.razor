@@ -5,10 +5,13 @@
 <MudDialogProvider />
 <MudSnackbarProvider />
 
+<a href="#main-content" class="skip-nav">Skip to main content</a>
+
 <MudLayout>
     <MudAppBar Elevation="1" Color="Color.Primary">
         <MudIconButton Icon="@Icons.Material.Filled.Menu" Color="Color.Inherit"
-                       Edge="Edge.Start" OnClick="@(() => _drawerOpen = !_drawerOpen)" />
+                       Edge="Edge.Start" OnClick="@(() => _drawerOpen = !_drawerOpen)"
+                       aria-label="Toggle navigation menu" />
         <MudText Typo="Typo.h6" Class="ml-3">Clinic Scheduler</MudText>
         <MudSpacer />
         <MudText Typo="Typo.body2" Color="Color.Inherit">
@@ -17,14 +20,15 @@
     </MudAppBar>
 
     <MudDrawer @bind-Open="_drawerOpen" Variant="DrawerVariant.Persistent"
-               ClipMode="DrawerClipMode.Always" Elevation="2">
+               ClipMode="DrawerClipMode.Always" Elevation="2"
+               role="navigation" aria-label="Main navigation">
         <MudDrawerHeader>
             <MudText Typo="Typo.subtitle1"><b>Pain Management</b></MudText>
         </MudDrawerHeader>
         <NavMenu />
     </MudDrawer>
 
-    <MudMainContent>
+    <MudMainContent role="main" id="main-content">
         <MudContainer MaxWidth="MaxWidth.ExtraLarge" Class="pa-4 pa-md-6">
             @Body
         </MudContainer>

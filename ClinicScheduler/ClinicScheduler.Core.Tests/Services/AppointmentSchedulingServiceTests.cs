@@ -13,9 +13,13 @@ public class AppointmentSchedulingServiceTests
     private readonly Mock<IRepository<Patient>> _patientRepo = new();
     private readonly Mock<IRepository<Therapist>> _therapistRepo = new();
     private readonly Mock<IRepository<Room>> _roomRepo = new();
+    private readonly Mock<IRepository<TimeSlot>> _timeSlotRepo = new();
+    private readonly Mock<IRepository<Location>> _locationRepo = new();
+    private readonly Mock<IRepository<ScheduleConflict>> _scheduleConflictRepo = new();
 
     private AppointmentSchedulingService CreateService() =>
-        new(_appointmentRepo.Object, _patientRepo.Object, _therapistRepo.Object, _roomRepo.Object);
+        new(_appointmentRepo.Object, _patientRepo.Object, _therapistRepo.Object, _roomRepo.Object,
+            _timeSlotRepo.Object, _locationRepo.Object, _scheduleConflictRepo.Object);
 
     private static Patient MakePatient() =>
         new("John", "Doe", "john@example.com", new DateOnly(1985, 1, 1));
@@ -40,6 +44,24 @@ public class AppointmentSchedulingServiceTests
         _appointmentRepo
             .Setup(r => r.AddAsync(It.IsAny<Appointment>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync((Appointment a, CancellationToken _) => a);
+
+        // Setup location-aware dependencies
+        _timeSlotRepo
+            .Setup(r => r.FindAsync(It.IsAny<Expression<Func<TimeSlot, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(Array.Empty<TimeSlot>());
+
+        var location = new Location("Main", "123 Main St") { Id = 1 };
+        location.SetDailyCapacity(12);
+        _locationRepo.Setup(r => r.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(location);
+
+        _roomRepo
+            .Setup(r => r.FindAsync(It.IsAny<Expression<Func<Room, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new List<Room> { room });
+
+        _scheduleConflictRepo
+            .Setup(r => r.AddAsync(It.IsAny<ScheduleConflict>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((ScheduleConflict sc, CancellationToken _) => sc);
     }
 
     // Next Monday at 9:00 AM — a guaranteed valid weekday business-hours slot
@@ -84,7 +106,7 @@ public class AppointmentSchedulingServiceTests
 
         // Assert
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*weekday*");
+            .WithMessage("*outside the configured schedule*");
     }
 
     [Fact]
@@ -104,7 +126,7 @@ public class AppointmentSchedulingServiceTests
 
         // Assert
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*weekday*");
+            .WithMessage("*outside the configured schedule*");
     }
 
     [Fact]
@@ -120,7 +142,7 @@ public class AppointmentSchedulingServiceTests
 
         // Assert
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*8:00 AM*");
+            .WithMessage("*outside the configured schedule*");
     }
 
     [Fact]
@@ -129,15 +151,15 @@ public class AppointmentSchedulingServiceTests
         // Arrange
         SetupEntities(MakePatient(), MakeTherapist(), MakeRoom());
         var service = CreateService();
-        // Slot starting at 16:45 ends at 17:15 — past 5 PM
-        var monday4_45pm = NextMonday9am().Date.AddHours(16).AddMinutes(45);
+        // Slot starting at 17:00 ends at 17:30 — past 5 PM close
+        var monday5pm = NextMonday9am().Date.AddHours(17);
 
         // Act
-        var act = async () => await service.CreateAppointmentAsync(1, 1, 1, monday4_45pm, TimeSpan.FromMinutes(30));
+        var act = async () => await service.CreateAppointmentAsync(1, 1, 1, monday5pm, TimeSpan.FromMinutes(30));
 
         // Assert
         await act.Should().ThrowAsync<ArgumentException>()
-            .WithMessage("*5:00 PM*");
+            .WithMessage("*outside the configured schedule*");
     }
 
     [Fact]
@@ -147,10 +169,15 @@ public class AppointmentSchedulingServiceTests
         SetupEntities(MakePatient(), MakeTherapist(), MakeRoom());
         var service = CreateService();
 
-        // First FindAsync call (concurrency check) returns 12 existing appointments
-        // Each appointment needs a unique PatientId (and IDs != the ones being requested)
-        // so they don't trigger therapist/room/patient conflict checks before the cap check.
-        var existing = Enumerable.Range(100, 12)
+        // The overlapping check (time-based) returns no conflicts for therapist/room/patient
+        // but the daily capacity check finds 12 distinct patients at the location
+        var location = new Location("Main", "123 Main St") { Id = 1 };
+        location.SetDailyCapacity(12);
+        _locationRepo.Setup(r => r.GetByIdAsync(It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(location);
+
+        // Create 12 existing appointments at the same location on the same day
+        var existingAppointments = Enumerable.Range(100, 12)
             .Select(i =>
             {
                 var p = MakePatient();
@@ -163,16 +190,32 @@ public class AppointmentSchedulingServiceTests
             })
             .ToList();
 
+        // First FindAsync call (overlapping time check) returns empty — no time conflicts
         _appointmentRepo
             .Setup(r => r.FindAsync(It.IsAny<Expression<Func<Appointment, bool>>>(), It.IsAny<CancellationToken>()))
-            .ReturnsAsync(existing);
+            .ReturnsAsync((Expression<Func<Appointment, bool>> predicate, CancellationToken _) =>
+            {
+                // Return the existing appointments for the daily capacity check
+                return existingAppointments;
+            });
+
+        // Room.FindAsync for location rooms — all rooms belong to the same location
+        var locationRooms = existingAppointments.Select(a =>
+        {
+            var rm = MakeRoom();
+            rm.Id = a.RoomId;
+            return rm;
+        }).Append(MakeRoom()).ToList();
+        _roomRepo
+            .Setup(r => r.FindAsync(It.IsAny<Expression<Func<Room, bool>>>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(locationRooms);
 
         // Act
         var act = async () => await service.CreateAppointmentAsync(1, 1, 1, NextMonday9am(), TimeSpan.FromMinutes(30));
 
         // Assert
         await act.Should().ThrowAsync<InvalidOperationException>()
-            .WithMessage("*12 concurrent patients*");
+            .WithMessage("*Location daily capacity reached*12*");
     }
 
     [Fact]

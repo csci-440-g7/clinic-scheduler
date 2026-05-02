@@ -1,4 +1,4 @@
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject IRepository<Therapist> TherapistRepo
 @inject AuthenticationStateProvider AuthState
 @inject ISnackbar Snackbar
@@ -94,6 +94,7 @@
         }
 
         var email = user.Identity.Name;
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         var patient = await DbContext.Patients.FirstOrDefaultAsync(p => p.Email == email);
 
         if (patient is null)
@@ -102,20 +103,27 @@
             return;
         }
 
-        Therapist? preferredTherapist = _therapistId > 0
-            ? await TherapistRepo.GetByIdAsync(_therapistId)
-            : null;
+        try
+        {
+            Therapist? preferredTherapist = _therapistId > 0
+                ? await DbContext.Therapists.FindAsync(_therapistId)
+                : null;
 
-        var preferredDateTime = _date.Date.Add(_time.ToTimeSpan()).ToUniversalTime();
+            var preferredDateTime = _date.Date.Add(_time.ToTimeSpan()).ToUniversalTime();
 
-        var request = new AppointmentRequest(patient, _reason.Trim(), preferredTherapist);
-        request.SetPreferredDateTime(preferredDateTime);
+            var request = new AppointmentRequest(patient, _reason.Trim(), preferredTherapist);
+            request.SetPreferredDateTime(preferredDateTime);
 
-        DbContext.AppointmentRequests.Add(request);
-        await DbContext.SaveChangesAsync();
+            DbContext.AppointmentRequests.Add(request);
+            await DbContext.SaveChangesAsync();
 
-        Snackbar.Add("Appointment request submitted", Severity.Success);
-        await OnRequested.InvokeAsync();
+            Snackbar.Add("Appointment request submitted", Severity.Success);
+            await OnRequested.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = $"Error submitting request: {ex.Message}";
+        }
     }
 }
 

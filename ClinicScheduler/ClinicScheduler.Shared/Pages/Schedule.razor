@@ -1,6 +1,6 @@
 @page "/schedule"
 @attribute [Authorize(Roles = "Admin,ClinicManager,Staff,Therapist")]
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject AppointmentSchedulingService SchedulingService
 @inject IRepository<Patient> PatientRepo
 @inject IRepository<Therapist> TherapistRepo
@@ -303,6 +303,7 @@
     private async Task LoadAppointmentsAsync()
     {
         _loading = true;
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         var weekEnd = _currentWeekStart.AddDays(7);
         _appointments = await DbContext.Appointments
             .Include(a => a.Patient)
@@ -365,6 +366,7 @@
     {
         try
         {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             var tracked = await DbContext.Appointments.FindAsync(appt.Id);
             if (tracked is null) return;
             tracked.Complete();
@@ -379,12 +381,13 @@
     {
         try
         {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             var tracked = await DbContext.Appointments.FindAsync(appt.Id);
             if (tracked is null) return;
             tracked.Cancel();
 
             // Notify patient
-            await CreatePatientNotificationAsync(appt,
+            await CreatePatientNotificationAsync(DbContext, appt,
                 NotificationType.SchedulingConflict,
                 "Appointment Canceled",
                 $"Your appointment on {appt.StartTime.ToLocalTime():ddd, MMM d h:mm tt} has been canceled.");
@@ -410,6 +413,7 @@
 
         try
         {
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
             var tracked = await DbContext.Appointments
                 .Include(a => a.TherapyType)
                 .FirstOrDefaultAsync(a => a.Id == _missedTarget.Id);
@@ -433,7 +437,7 @@
             }
 
             // Notify patient
-            await CreatePatientNotificationAsync(_missedTarget,
+            await CreatePatientNotificationAsync(DbContext, _missedTarget,
                 NotificationType.MissedAppointment,
                 "Appointment Missed",
                 $"Your appointment on {_missedTarget.StartTime.ToLocalTime():ddd, MMM d h:mm tt} was recorded as missed. {rescheduleMsg}",
@@ -452,6 +456,7 @@
     }
 
     private async Task CreatePatientNotificationAsync(
+        ClinicDbContext DbContext,
         Appointment appt,
         NotificationType type,
         string title,

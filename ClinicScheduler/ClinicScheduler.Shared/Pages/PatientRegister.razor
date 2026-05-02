@@ -1,0 +1,170 @@
+@page "/register"
+@attribute [Microsoft.AspNetCore.Authorization.AllowAnonymous]
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@inject UserManager<AppUser> UserManager
+@inject IDbContextFactory<ClinicDbContext> DbFactory
+@inject NavigationManager Nav
+@inject ISnackbar Snackbar
+
+<PageTitle>Patient Registration</PageTitle>
+
+<div style="max-width:500px; margin:40px auto;">
+    <MudPaper Class="pa-6" Elevation="2">
+        <MudText Typo="Typo.h5" Class="mb-1">Create Your Account</MudText>
+        <MudText Typo="Typo.body2" Class="mud-text-secondary mb-4">
+            Register as a patient to request appointments and view your schedule.
+        </MudText>
+
+        @if (_errorMessage is not null)
+        {
+            <MudAlert Severity="Severity.Error" Class="mb-3" ShowCloseIcon="true"
+                      CloseIconClicked="@(() => _errorMessage = null)">
+                @_errorMessage
+            </MudAlert>
+        }
+
+        @if (_success)
+        {
+            <MudAlert Severity="Severity.Success" Class="mb-3">
+                Account created! Redirecting to login...
+            </MudAlert>
+        }
+        else
+        {
+            <MudGrid>
+                <MudItem xs="6">
+                    <MudTextField @bind-Value="_firstName" Label="First Name" Required="true"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+                <MudItem xs="6">
+                    <MudTextField @bind-Value="_lastName" Label="Last Name" Required="true"
+                                  Variant="Variant.Outlined" />
+                </MudItem>
+            </MudGrid>
+            <MudTextField @bind-Value="_email" Label="Email" Required="true"
+                          Variant="Variant.Outlined" InputType="InputType.Email" Class="mt-3" />
+            <MudTextField @bind-Value="_phone" Label="Phone (optional)"
+                          Variant="Variant.Outlined" Class="mt-3" />
+            <MudDatePicker @bind-Date="_dob" Label="Date of Birth" Required="true"
+                           Variant="Variant.Outlined" Class="mt-3"
+                           Editable="true" DateFormat="MM/dd/yyyy" />
+            <MudTextField @bind-Value="_password" Label="Password" Required="true"
+                          Variant="Variant.Outlined" InputType="InputType.Password" Class="mt-3"
+                          HelperText="Min 8 chars, uppercase, digit, and special character" />
+            <MudTextField @bind-Value="_passwordConfirm" Label="Confirm Password" Required="true"
+                          Variant="Variant.Outlined" InputType="InputType.Password" Class="mt-3" />
+
+            <MudButton Variant="Variant.Filled" Color="Color.Primary" FullWidth="true"
+                       Class="mt-4" OnClick="RegisterAsync" Disabled="_saving">
+                @(_saving ? "Creating Account..." : "Register")
+            </MudButton>
+
+            <MudText Typo="Typo.body2" Align="Align.Center" Class="mt-3">
+                Already have an account? <MudLink Href="/login">Sign in</MudLink>
+            </MudText>
+        }
+    </MudPaper>
+</div>
+
+@code {
+    private string _firstName = "";
+    private string _lastName = "";
+    private string _email = "";
+    private string? _phone;
+    private DateTime? _dob;
+    private string _password = "";
+    private string _passwordConfirm = "";
+    private string? _errorMessage;
+    private bool _saving;
+    private bool _success;
+
+    private async Task RegisterAsync()
+    {
+        _errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_firstName) || string.IsNullOrWhiteSpace(_lastName))
+        {
+            _errorMessage = "First and last name are required.";
+            return;
+        }
+        if (string.IsNullOrWhiteSpace(_email))
+        {
+            _errorMessage = "Email is required.";
+            return;
+        }
+        if (_dob is null)
+        {
+            _errorMessage = "Date of birth is required.";
+            return;
+        }
+        if (_password != _passwordConfirm)
+        {
+            _errorMessage = "Passwords do not match.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var trimmedEmail = _email.Trim();
+
+            // Check if email already exists in Identity
+            var existingUser = await UserManager.FindByEmailAsync(trimmedEmail);
+            if (existingUser is not null)
+            {
+                _errorMessage = "An account with this email already exists.";
+                _saving = false;
+                return;
+            }
+
+            // Check if email already exists in Patients table
+            await using var DbContext = await DbFactory.CreateDbContextAsync();
+            var existingPatient = await DbContext.Patients
+                .AnyAsync(p => p.Email == trimmedEmail);
+            if (existingPatient)
+            {
+                _errorMessage = "An account with this email already exists.";
+                _saving = false;
+                return;
+            }
+
+            // Create the Identity user first — if password policy fails, no orphaned Patient is left
+            var appUser = new AppUser
+            {
+                UserName = trimmedEmail,
+                Email = trimmedEmail,
+                DisplayName = $"{_firstName.Trim()} {_lastName.Trim()}",
+                EmailConfirmed = true
+            };
+            var result = await UserManager.CreateAsync(appUser, _password);
+            if (!result.Succeeded)
+            {
+                _errorMessage = string.Join(" ", result.Errors.Select(e => e.Description));
+                _saving = false;
+                return;
+            }
+
+            await UserManager.AddToRoleAsync(appUser, "Patient");
+
+            // Create the Patient domain entity after Identity user succeeds
+            var dob = DateOnly.FromDateTime(_dob.Value.Date);
+            var patient = new Patient(_firstName.Trim(), _lastName.Trim(), trimmedEmail, dob,
+                string.IsNullOrWhiteSpace(_phone) ? null : _phone.Trim());
+            DbContext.Patients.Add(patient);
+            await DbContext.SaveChangesAsync();
+
+            _success = true;
+            StateHasChanged();
+
+            // Redirect to login after a short delay
+            await Task.Delay(1500);
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = ex.Message;
+            _saving = false;
+        }
+    }
+}

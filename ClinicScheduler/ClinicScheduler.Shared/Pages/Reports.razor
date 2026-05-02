@@ -1,6 +1,6 @@
 @page "/reports"
 @attribute [Authorize(Roles = "Admin,ClinicManager")]
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 
 <PageTitle>Reports</PageTitle>
 
@@ -200,6 +200,7 @@
         _loading = true;
         _generated = false;
 
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         var from = _startDate.Value.ToUniversalTime();
         var to = _endDate.Value.AddDays(1).ToUniversalTime();
 

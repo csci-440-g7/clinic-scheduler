@@ -1,6 +1,6 @@
 @page "/dashboard/staff"
 @inject NavigationManager Nav
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject AuthenticationStateProvider AuthState
 @inject ISnackbar Snackbar
 
@@ -153,6 +153,7 @@
 
         _staffName = user.Identity?.Name?.Split('@')[0] ?? "Staff";
 
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         _filteredDoctors = await DbContext.Therapists.ToListAsync();
         _filteredPatients = await DbContext.Patients.ToListAsync();
     }
@@ -177,6 +178,7 @@
     {
         doctorSearchTerm = term ?? "";
         var t = doctorSearchTerm.Trim();
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         _filteredDoctors = string.IsNullOrWhiteSpace(t)
             ? await DbContext.Therapists.ToListAsync()
             : await DbContext.Therapists
@@ -188,6 +190,7 @@
     {
         patientSearchTerm = term ?? "";
         var t = patientSearchTerm.Trim();
+        await using var DbContext = await DbFactory.CreateDbContextAsync();
         _filteredPatients = string.IsNullOrWhiteSpace(t)
             ? await DbContext.Patients.ToListAsync()
             : await DbContext.Patients

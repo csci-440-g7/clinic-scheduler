@@ -26,6 +26,8 @@ public class TreatmentPlan
     public DateOnly StartDate { get; private set; }
     public DateOnly EndDate { get; private set; }
 
+    public TreatmentPlanStatus Status { get; private set; } = TreatmentPlanStatus.Active;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
@@ -57,6 +59,7 @@ public class TreatmentPlan
         StartDate = startDate;
         
         EndDate = CalculateEndDate(startDate, totalDays, frequencyPerWeek);
+        Status = TreatmentPlanStatus.Active;
     }
 
     private static DateOnly CalculateEndDate(DateOnly startDate, int totalDays, int frequencyPerWeek)
@@ -117,6 +120,37 @@ public class TreatmentPlan
     public void ExtendForMissedSession()
     {
         EndDate = EndDate.AddDays(7);
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Suspends the treatment plan. Cannot suspend an ended plan.
+    /// </summary>
+    public void Suspend()
+    {
+        if (Status == TreatmentPlanStatus.Ended)
+            throw new InvalidOperationException("Cannot suspend an ended treatment plan.");
+        Status = TreatmentPlanStatus.Suspended;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Ends the treatment plan permanently.
+    /// </summary>
+    public void End()
+    {
+        Status = TreatmentPlanStatus.Ended;
+        UpdatedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Reactivates a suspended treatment plan. Cannot reactivate an ended plan.
+    /// </summary>
+    public void Reactivate()
+    {
+        if (Status == TreatmentPlanStatus.Ended)
+            throw new InvalidOperationException("Cannot reactivate an ended treatment plan.");
+        Status = TreatmentPlanStatus.Active;
         UpdatedAt = DateTime.UtcNow;
     }
 }

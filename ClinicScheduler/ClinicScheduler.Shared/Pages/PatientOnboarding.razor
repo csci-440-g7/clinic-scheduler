@@ -4,7 +4,7 @@
 @inject IRepository<Patient> PatientRepo
 @inject IRepository<Therapist> TherapistRepo
 @inject IRepository<TherapyType> TherapyTypeRepo
-@inject ClinicDbContext DbContext
+@inject IDbContextFactory<ClinicDbContext> DbFactory
 @inject UserManager<AppUser> UserManager
 @inject ISnackbar Snackbar
 @inject NavigationManager Nav
@@ -366,6 +366,7 @@
                     var tt = _therapyTypes.First(t => t.Id == id);
                     plan.AddTherapy(tt);
                 }
+                await using var DbContext = await DbFactory.CreateDbContextAsync();
                 DbContext.TreatmentPlans.Add(plan);
                 await DbContext.SaveChangesAsync();
             }
