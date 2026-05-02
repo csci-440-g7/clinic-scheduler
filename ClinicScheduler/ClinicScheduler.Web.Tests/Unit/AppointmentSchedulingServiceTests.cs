@@ -294,8 +294,9 @@ public class AppointmentSchedulingServiceTests
         result.PatientId.Should().Be(1);
         result.TherapistId.Should().Be(1);
         result.RoomId.Should().Be(1);
-        result.StartTime.Should().BeAfter(ValidSlot);
-        // Same time-of-day preferred: first candidate tried is the next weekday at 09:00
+        // Rescheduled appointment must be at least 7 days from now
+        result.StartTime.Should().BeOnOrAfter(DateTime.UtcNow.Date.AddDays(7));
+        // Same time-of-day preferred: first candidate tried is at 09:00
         result.StartTime.TimeOfDay.Should().Be(ValidSlot.TimeOfDay);
     }
 

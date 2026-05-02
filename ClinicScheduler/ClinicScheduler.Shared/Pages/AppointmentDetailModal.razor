@@ -1,4 +1,7 @@
+@inject ClinicDbContext DbContext
 @inject IDbContextFactory<ClinicDbContext> DbFactory
+@inject AppointmentSchedulingService SchedulingService
+@inject ISnackbar Snackbar
 
 <div class="appt-modal-root"
      @onclick="OnClose"
@@ -9,6 +12,7 @@
         <div class="appt-detail">
             <div class="appt-detail-header">
                 <h3 id="appt-modal-title" class="appt-detail-title">Appointment</h3>
+                <span class="appt-status-chip appt-status-@Appointment.Status.ToString().ToLowerInvariant()">@Appointment.Status</span>
                 <button type="button" class="appt-detail-close" @onclick="OnClose" title="Close">×</button>
             </div>
             <div class="appt-detail-grid">
@@ -58,7 +62,10 @@
                 }
                 else
                 {
-                    <p class="appt-detail-staff-hint">Staff scheduling view: patient and doctor are shown. Location, room, and clinical notes are visible to patients and care providers only.</p>
+                    <div class="appt-detail-row">
+                        <span class="k">Room</span>
+                        <span class="v">@(Appointment.Room?.Name ?? "—")</span>
+                    </div>
                 }
 
                 @if (ViewerRole == "patient" && Appointment.Status is AppointmentStatus.Scheduled or AppointmentStatus.Rescheduled)
@@ -75,6 +82,45 @@
                         {
                             <button type="button" class="appt-cancel-btn" @onclick="() => _showCancelForm = true">
                                 Request Cancellation
+                            </button>
+                        }
+                    </div>
+                }
+
+                @* ── Staff / Doctor actions ── *@
+                @if (ViewerRole is "staff" or "doctor" && Appointment.Status is AppointmentStatus.Scheduled or AppointmentStatus.Rescheduled)
+                {
+                    <div class="appt-staff-actions">
+                        @if (_showMissedConfirm)
+                        {
+                            <div class="appt-missed-confirm">
+                                <p class="appt-missed-confirm-text">
+                                    Mark <strong>@(Appointment.Patient?.FullName ?? "this patient")</strong>'s appointment as missed?
+                                    The system will auto-reschedule to the next available slot.
+                                </p>
+                                @if (!string.IsNullOrWhiteSpace(_missedError))
+                                {
+                                    <p class="appt-missed-error">@_missedError</p>
+                                }
+                                <div class="appt-missed-confirm-actions">
+                                    <button type="button" class="appt-missed-cancel-btn" disabled="@_missedLoading" @onclick="() => _showMissedConfirm = false">Cancel</button>
+                                    <button type="button" class="appt-missed-confirm-btn" disabled="@_missedLoading" @onclick="ConfirmMarkMissedAsync">
+                                        @if (_missedLoading)
+                                        {
+                                            <span>Processing…</span>
+                                        }
+                                        else
+                                        {
+                                            <span>Mark Missed &amp; Reschedule</span>
+                                        }
+                                    </button>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <button type="button" class="appt-mark-missed-btn" @onclick="() => _showMissedConfirm = true">
+                                Mark as Missed
                             </button>
                         }
                     </div>
@@ -102,17 +148,24 @@
     private bool _showCancelForm;
     private bool _hasPendingCancelRequest;
 
+    // Mark-as-missed state
+    private bool _showMissedConfirm;
+    private bool _missedLoading;
+    private string? _missedError;
+
     protected override async Task OnParametersSetAsync()
     {
         _editNotes = Appointment.Notes ?? "";
         _savedMessage = null;
         _showCancelForm = false;
+        _showMissedConfirm = false;
+        _missedLoading = false;
+        _missedError = null;
         await CheckPendingCancelRequestAsync();
     }
 
     private async Task CheckPendingCancelRequestAsync()
     {
-        await using var DbContext = await DbFactory.CreateDbContextAsync();
         _hasPendingCancelRequest = await DbContext.CancelAppointmentRequests
             .AnyAsync(r => r.AppointmentId == Appointment.Id && r.Status == AppointmentRequestStatus.Pending);
     }
@@ -127,16 +180,77 @@
     private async Task SaveNotesAsync()
     {
         if (ViewerRole != "doctor") return;
-        await using var DbContext = await DbFactory.CreateDbContextAsync();
-        var tracked = await DbContext.Appointments.FindAsync(Appointment.Id);
-        if (tracked is not null)
-        {
-            tracked.Notes = string.IsNullOrWhiteSpace(_editNotes) ? null : _editNotes.Trim();
-            await DbContext.SaveChangesAsync();
-            Appointment.Notes = tracked.Notes;
-        }
+        Appointment.Notes = string.IsNullOrWhiteSpace(_editNotes) ? null : _editNotes.Trim();
+        await DbContext.SaveChangesAsync();
         _savedMessage = "Saved.";
         await OnStatusChanged.InvokeAsync();
+    }
+
+    private async Task ConfirmMarkMissedAsync()
+    {
+        _missedError = null;
+        _missedLoading = true;
+
+        try
+        {
+            await using var db = await DbFactory.CreateDbContextAsync();
+
+            // Load the appointment in this context so EF can track changes
+            var tracked = await db.Appointments
+                .Include(a => a.Patient)
+                .Include(a => a.Therapist)
+                .Include(a => a.TherapyType)
+                .FirstOrDefaultAsync(a => a.Id == Appointment.Id);
+
+            if (tracked is null)
+            {
+                _missedError = "Appointment not found.";
+                return;
+            }
+
+            // Mark as missed
+            tracked.MarkAsMissed();
+            await db.SaveChangesAsync();
+
+            // Auto-reschedule
+            Appointment? rescheduled = null;
+            string rescheduleMsg;
+            try
+            {
+                rescheduled = await SchedulingService.RescheduleAfterMissedAsync(tracked);
+                rescheduleMsg = $"Rescheduled to {rescheduled.StartTime.ToLocalTime():ddd, MMM d 'at' h:mm tt}.";
+            }
+            catch (InvalidOperationException)
+            {
+                rescheduleMsg = "No open slot found in the next 30 days — please schedule manually.";
+            }
+
+            // Notify patient
+            var patientUser = await db.Users.FirstOrDefaultAsync(u => u.UserName == tracked.Patient.Email);
+            if (patientUser is not null)
+            {
+                db.Notifications.Add(new Notification(
+                    patientUser.Id,
+                    NotificationType.MissedAppointment,
+                    "Appointment Missed",
+                    $"Your appointment on {tracked.StartTime.ToLocalTime():ddd, MMM d 'at' h:mm tt} was recorded as missed. {rescheduleMsg}",
+                    rescheduled?.Id ?? tracked.Id));
+            }
+
+            await db.SaveChangesAsync();
+
+            _showMissedConfirm = false;
+            Snackbar.Add($"Marked as missed. {rescheduleMsg}", Severity.Warning);
+            await OnStatusChanged.InvokeAsync();
+        }
+        catch (Exception ex)
+        {
+            _missedError = ex.Message;
+        }
+        finally
+        {
+            _missedLoading = false;
+        }
     }
 
     private string FormatRange() => $"{Appointment.StartTime:h:mm tt} – {Appointment.EndTime:h:mm tt}";
