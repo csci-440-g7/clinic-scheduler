@@ -244,9 +244,9 @@ public class AppointmentsApiTests : IAsyncLifetime
         rescheduled.GetProperty("therapistId").GetInt32().Should().Be(t);
         rescheduled.GetProperty("roomId").GetInt32().Should().Be(r);
 
-        // Rescheduled time must be after the missed slot
+        // Rescheduled time must be at least 7 days from now
         var rescheduledStart = rescheduled.GetProperty("startTime").GetDateTime();
-        rescheduledStart.Should().BeAfter(Slot9am);
+        rescheduledStart.Should().BeOnOrAfter(DateTime.UtcNow.Date.AddDays(7));
     }
 
     [Fact]
