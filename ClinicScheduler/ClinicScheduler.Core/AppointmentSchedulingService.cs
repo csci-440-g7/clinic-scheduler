@@ -212,7 +212,10 @@ public class AppointmentSchedulingService
         var locationId = room.LocationId;
 
         var missedTime = TimeOnly.FromDateTime(missed.StartTime);
-        var searchStart = missed.StartTime.Date.AddDays(1);
+        // Always reschedule at least 7 days from now, regardless of when the
+        // original appointment was.  This avoids booking into the past when an
+        // old appointment is marked missed and gives the patient reasonable notice.
+        var searchStart = DateTime.UtcNow.Date.AddDays(7);
         var searchEnd = searchStart.AddDays(30);
 
         // Build candidate slots: try same time-of-day first across 30 days, then all other slots
