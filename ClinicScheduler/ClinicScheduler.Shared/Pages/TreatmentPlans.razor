@@ -172,7 +172,9 @@
     protected override async Task OnInitializedAsync()
     {
         _allPatients = (await PatientRepo.GetAllAsync()).ToList();
-        _allTherapists = (await TherapistRepo.GetAllAsync()).ToList();
+        _allTherapists = (await TherapistRepo.GetAllAsync())
+            .Where(t => !string.IsNullOrWhiteSpace(t.Specialty))
+            .ToList();
         _allTherapyTypes = (await TherapyTypeRepo.GetAllAsync()).ToList();
         if (_allPatients.Count > 0) _formPatientId = _allPatients[0].Id;
         if (_allTherapists.Count > 0) _formTherapistId = _allTherapists[0].Id;
