@@ -71,7 +71,9 @@
     protected override async Task OnInitializedAsync()
     {
         _date = InitialDate;
-        _therapists = (await TherapistRepo.GetAllAsync()).ToList();
+        _therapists = (await TherapistRepo.GetAllAsync())
+            .Where(t => !string.IsNullOrWhiteSpace(t.Specialty))
+            .ToList();
     }
 
     private async Task SubmitAsync()
