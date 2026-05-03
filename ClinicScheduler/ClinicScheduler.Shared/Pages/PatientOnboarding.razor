@@ -278,7 +278,9 @@
 
     protected override async Task OnInitializedAsync()
     {
-        _therapists = (await TherapistRepo.GetAllAsync()).ToList();
+        _therapists = (await TherapistRepo.GetAllAsync())
+            .Where(t => !string.IsNullOrWhiteSpace(t.Specialty))
+            .ToList();
         _therapyTypes = (await TherapyTypeRepo.GetAllAsync()).ToList();
         if (_therapists.Count > 0) _therapistId = _therapists[0].Id;
         _planStartDate = DateTime.Today;
