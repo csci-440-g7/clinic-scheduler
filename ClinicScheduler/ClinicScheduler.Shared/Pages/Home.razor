@@ -421,7 +421,10 @@
 
         if (user.IsInRole("Admin") || user.IsInRole("ClinicManager") || user.IsInRole("Staff") || user.IsInRole("Therapist"))
         {
-            _allTherapists = (await TherapistRepo.GetAllAsync()).ToList();
+            _allTherapists = (await TherapistRepo.GetAllAsync())
+                .Where(t => !string.IsNullOrWhiteSpace(t.Specialty)
+                    && !t.Specialty.Contains("admin", StringComparison.OrdinalIgnoreCase))
+                .ToList();
             _allRooms = (await RoomRepo.GetAllAsync()).ToList();
             if (_allTherapists.Count > 0) _approveTherapistId = _allTherapists[0].Id;
             if (_allRooms.Count > 0) _approveRoomId = _allRooms[0].Id;
