@@ -95,7 +95,10 @@
     {
         _date = InitialDate;
         _patients = (await PatientRepo.GetAllAsync()).ToList();
-        _therapists = (await TherapistRepo.GetAllAsync()).ToList();
+        _therapists = (await TherapistRepo.GetAllAsync())
+            .Where(t => !string.IsNullOrWhiteSpace(t.Specialty)
+                && !t.Specialty.Contains("admin", StringComparison.OrdinalIgnoreCase))
+            .ToList();
         _rooms = (await RoomRepo.GetAllAsync()).ToList();
     }
 

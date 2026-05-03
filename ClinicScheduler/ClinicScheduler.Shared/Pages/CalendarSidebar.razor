@@ -327,7 +327,10 @@
         {
             // Use the preferred therapist, or fall back to the first available therapist
             var therapistId = request.PreferredTherapistId
-                ?? (await TherapistRepo.GetAllAsync()).FirstOrDefault()?.Id
+                ?? (await TherapistRepo.GetAllAsync())
+                    .Where(t => !string.IsNullOrWhiteSpace(t.Specialty)
+                        && !t.Specialty.Contains("admin", StringComparison.OrdinalIgnoreCase))
+                    .FirstOrDefault()?.Id
                 ?? 0;
 
             // Use the first available room
