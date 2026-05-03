@@ -429,7 +429,9 @@
         }
         else if (user.IsInRole("Patient"))
         {
-            _allTherapists = (await TherapistRepo.GetAllAsync()).ToList();
+            _allTherapists = (await TherapistRepo.GetAllAsync())
+                .Where(t => !string.IsNullOrWhiteSpace(t.Specialty))
+                .ToList();
             await LoadPatientDashboardAsync(user.Identity?.Name ?? "");
         }
 
