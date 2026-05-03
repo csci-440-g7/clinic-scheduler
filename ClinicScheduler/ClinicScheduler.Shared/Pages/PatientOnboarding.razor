@@ -279,7 +279,8 @@
     protected override async Task OnInitializedAsync()
     {
         _therapists = (await TherapistRepo.GetAllAsync())
-            .Where(t => !string.IsNullOrWhiteSpace(t.Specialty))
+            .Where(t => !string.IsNullOrWhiteSpace(t.Specialty)
+                && !t.Specialty.Contains("admin", StringComparison.OrdinalIgnoreCase))
             .ToList();
         _therapyTypes = (await TherapyTypeRepo.GetAllAsync()).ToList();
         if (_therapists.Count > 0) _therapistId = _therapists[0].Id;
