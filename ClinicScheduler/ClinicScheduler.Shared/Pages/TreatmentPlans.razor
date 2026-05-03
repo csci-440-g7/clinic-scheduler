@@ -173,7 +173,8 @@
     {
         _allPatients = (await PatientRepo.GetAllAsync()).ToList();
         _allTherapists = (await TherapistRepo.GetAllAsync())
-            .Where(t => !string.IsNullOrWhiteSpace(t.Specialty))
+            .Where(t => !string.IsNullOrWhiteSpace(t.Specialty)
+                && !t.Specialty.Contains("admin", StringComparison.OrdinalIgnoreCase))
             .ToList();
         _allTherapyTypes = (await TherapyTypeRepo.GetAllAsync()).ToList();
         if (_allPatients.Count > 0) _formPatientId = _allPatients[0].Id;
