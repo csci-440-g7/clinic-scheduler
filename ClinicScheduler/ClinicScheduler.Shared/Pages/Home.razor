@@ -558,6 +558,12 @@
         _approveError = null;
         if (_approveTarget is null) return;
 
+        if (_approveTarget.PreferredDateTime < DateTime.UtcNow)
+        {
+            _approveError = "Cannot approve a request for a past date. Please deny and ask the patient to resubmit.";
+            return;
+        }
+
         try
         {
             await using var DbContext = await DbFactory.CreateDbContextAsync();
