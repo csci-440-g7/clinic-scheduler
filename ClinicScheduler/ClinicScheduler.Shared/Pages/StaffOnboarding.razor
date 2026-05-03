@@ -90,18 +90,19 @@
     <MudPaper Class="pa-4" Elevation="1">
         <MudText Typo="Typo.h6" Class="mb-1">Role &amp; Specialty</MudText>
         <MudText Typo="Typo.body2" Class="mb-4 mud-text-secondary">
-            Assign a clinical specialty. This can be updated later.
+            Assign a system role and clinical specialty. These can be updated later.
         </MudText>
         <MudGrid>
             <MudItem xs="12" sm="6">
-                <MudSelect T="string" @bind-Value="_specialty" Label="Specialty (optional)"
-                           Variant="Variant.Outlined">
-                    <MudSelectItem T="string" Value="@("")">None</MudSelectItem>
-                    <MudSelectItem T="string" Value="@("Chiropractic")">Chiropractic</MudSelectItem>
-                    <MudSelectItem T="string" Value="@("Physical Therapy")">Physical Therapy</MudSelectItem>
-                    <MudSelectItem T="string" Value="@("Massage Therapy")">Massage Therapy</MudSelectItem>
-                    <MudSelectItem T="string" Value="@("Pain Management")">Pain Management</MudSelectItem>
-                </MudSelect>
+                <MudTextField @bind-Value="_role" Label="Role" Required="true"
+                              Variant="Variant.Outlined"
+                              Placeholder="e.g. Staff, Therapist, ClinicManager"
+                              HelperText="The system role this person will have" />
+            </MudItem>
+            <MudItem xs="12" sm="6">
+                <MudTextField @bind-Value="_specialty" Label="Specialty (optional)"
+                              Variant="Variant.Outlined"
+                              Placeholder="e.g. Physical Therapy, Chiropractic" />
             </MudItem>
         </MudGrid>
         <div class="d-flex justify-space-between mt-4">
@@ -109,7 +110,7 @@
                        StartIcon="@Icons.Material.Filled.ArrowBack">
                 Back
             </MudButton>
-            <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="@(() => _step = 2)"
+            <MudButton Variant="Variant.Filled" Color="Color.Secondary" OnClick="GoToStep2"
                        EndIcon="@Icons.Material.Filled.ArrowForward">
                 Next
             </MudButton>
@@ -131,6 +132,10 @@
                 {
                     <tr><td><b>Phone</b></td><td>@_phone</td></tr>
                 }
+                <tr>
+                    <td><b>Role</b></td>
+                    <td><MudChip T="string" Size="Size.Small" Color="Color.Primary">@_role</MudChip></td>
+                </tr>
                 <tr>
                     <td><b>Specialty</b></td>
                     <td>
@@ -171,6 +176,7 @@
     private string _lastName = "";
     private string _email = "";
     private string? _phone;
+    private string _role = "Therapist";
     private string? _specialty;
 
     private void GoToStep1()
@@ -187,6 +193,17 @@
             return;
         }
         _step = 1;
+    }
+
+    private void GoToStep2()
+    {
+        _errorMessage = null;
+        if (string.IsNullOrWhiteSpace(_role))
+        {
+            _errorMessage = "Role is required.";
+            return;
+        }
+        _step = 2;
     }
 
     private async Task FinishAsync()
