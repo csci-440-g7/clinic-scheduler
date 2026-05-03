@@ -52,8 +52,7 @@
                                     style="@ApptStyle(day, appt)"
                                     @onclick="() => ToggleAppointment(appt)">
                                 <div class="appt-title">@ApptTitle(appt)</div>
-                                <div class="appt-sub">@Subtitle(appt)</div>
-                                <div class="appt-detail-line">@(appt.Room?.Name ?? "") · @FormatRange(appt)</div>
+                                <div class="appt-detail-line">@Subtitle(appt) · @FormatRange(appt)</div>
                             </button>
                         }
                     </div>
