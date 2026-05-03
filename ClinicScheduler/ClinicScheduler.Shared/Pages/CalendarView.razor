@@ -52,9 +52,8 @@
                                     style="@ApptStyle(day, appt)"
                                     @onclick="() => ToggleAppointment(appt)">
                                 <div class="appt-title">@ApptTitle(appt)</div>
-                                <div class="appt-time">@FormatRange(appt)</div>
                                 <div class="appt-sub">@Subtitle(appt)</div>
-                                <div class="appt-hint">@(_selected?.Id == appt.Id ? "Hide details" : "Details")</div>
+                                <div class="appt-detail-line">@(appt.Room?.Name ?? "") · @FormatRange(appt)</div>
                             </button>
                         }
                     </div>
@@ -93,7 +92,7 @@
 
     private const int StartHour = 7;
     private const int EndHour = 19;
-    private const int HourHeightPx = 40;
+    private const int HourHeightPx = 72;
     private const int DayHeaderHeightPx = 54;
     private int DayBodyHeightPx => (EndHour - StartHour) * HourHeightPx;
 
@@ -215,7 +214,7 @@
     {
         if (a.Status is AppointmentStatus.Missed)
             return "Missed";
-        return a.TherapyType?.Name ?? a.Status.ToString();
+        return a.Patient?.FullName ?? a.Status.ToString();
     }
 
     private static string ApptCss(Appointment a)
