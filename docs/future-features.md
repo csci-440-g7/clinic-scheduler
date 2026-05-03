@@ -5,7 +5,7 @@ Planned enhancements identified during development but deferred to keep the curr
 ## Security
 
 ### Multi-Factor Authentication (TOTP)
-ASP.NET Core Identity has built-in TOTP support. Users would scan a QR code with Google Authenticator or similar, then enter a 6-digit code at login. No AWS services required — works offline. A `Twofactor.razor` page already exists as a starting point. This is the recommended approach for HIPAA compliance.
+ASP.NET Core Identity has built-in TOTP support. Users would scan a QR code with Google Authenticator or similar, then enter a 6-digit code at login. No AWS services required — works offline. This is the recommended approach for HIPAA compliance.
 
 ### SMS-Based MFA (alternative)
 If text message verification is preferred over authenticator apps, Amazon SNS can deliver 6-digit codes via SMS at ~$0.00645 per message. Requires implementing a custom `ISmsSender` interface.

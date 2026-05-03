@@ -233,7 +233,7 @@
         else
         {
             _filteredPatients = await DbContext.Patients
-                .Where(p => p.FirstName.Contains(term) || p.LastName.Contains(term))
+                .Where(p => EF.Functions.ILike(p.FirstName, $"%{term}%") || EF.Functions.ILike(p.LastName, $"%{term}%"))
                 .ToListAsync();
         }
     }

@@ -157,7 +157,7 @@ See [TESTING.md](TESTING.md) for full strategy documentation.
 |---|---|---|
 | GitHub Actions CI/CD pipeline (Phase 3) | High | Create `.github/workflows/deploy.yml`; add `EC2_HOST=52.72.1.65`, `EC2_USER=ec2-user`, `EC2_SSH_KEY` secrets to repo |
 | Full end-to-end login flow smoke test | High | Login page replaced with real Identity login — needs browser verification that sign-in works with all seeded accounts |
-| `Twofactor.razor` mock cleanup | Medium | `/2fa` still uses hardcoded "1234" code — either wire to real TOTP/email 2FA or remove the page entirely |
+| `Twofactor.razor` mock cleanup | ✅ Done | Removed mock `/2fa` page — real MFA deferred as a future enhancement (see `docs/future-features.md`) |
 | `AllowedOrigins` in production config | Low | Populate `AllowedOrigins` in EC2 `.env` or `appsettings.Production.json` if API will be consumed from external origins |
 | Concurrency / load test for 12-patient cap | Low | Would require parallel HTTP requests in an integration test; low risk in practice |
 

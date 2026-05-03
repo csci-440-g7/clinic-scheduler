@@ -251,7 +251,7 @@
 
                 if (plan.TherapistId != _formTherapistId)
                 {
-                    var newTherapist = await TherapistRepo.GetByIdAsync(_formTherapistId)
+                    var newTherapist = await DbContext.Therapists.FindAsync(_formTherapistId)
                         ?? throw new InvalidOperationException("Therapist not found.");
                     plan.ChangeTherapist(newTherapist);
                 }
@@ -271,9 +271,10 @@
             }
             else
             {
-                var patient = await PatientRepo.GetByIdAsync(_formPatientId)
+                // Load patient and therapist from the SAME DbContext to avoid cross-context tracking errors
+                var patient = await DbContext.Patients.FindAsync(_formPatientId)
                     ?? throw new InvalidOperationException("Patient not found.");
-                var therapist = await TherapistRepo.GetByIdAsync(_formTherapistId)
+                var therapist = await DbContext.Therapists.FindAsync(_formTherapistId)
                     ?? throw new InvalidOperationException("Therapist not found.");
 
                 var plan = new TreatmentPlan(patient, therapist, _formFrequency, _formTotalDays, startDate);

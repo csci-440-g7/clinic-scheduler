@@ -3,7 +3,6 @@ using System.Text.Json.Serialization;
 using ClinicScheduler.Web;
 using ClinicScheduler.Core.Services;
 using ClinicScheduler.Web.Components;
-using ClinicScheduler.Shared.Services;
 using ClinicScheduler.Web.Services;
 using ClinicScheduler.Core.Interfaces;
 using ClinicScheduler.Infrastructure.Data;
@@ -139,9 +138,6 @@ builder.Services.AddServerSideBlazor(options =>
     options.DisconnectedCircuitRetentionPeriod = TimeSpan.FromMinutes(10);
     options.DetailedErrors = true;
 });
-
-// Add device-specific services used by the ClinicScheduler.Shared project
-builder.Services.AddSingleton<IFormFactor, FormFactor>();
 
 builder.Services.AddMudServices();
 var app = builder.Build();

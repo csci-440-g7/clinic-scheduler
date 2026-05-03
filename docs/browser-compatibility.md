@@ -19,6 +19,11 @@ Blazor WebAssembly requires browsers with WebAssembly support. All browsers list
 
 - **Safari on iOS:** Blazor Server connections may drop on iOS when the app is backgrounded for extended periods. The app reconnects automatically when brought back to the foreground.
 - **Firefox Private Browsing:** Some local storage features may behave differently in private browsing mode.
+- **Brave Browser:** Brave is Chromium-based and renders the application correctly, but its built-in Shields feature can interfere with functionality:
+  - **SignalR WebSocket connection:** Blazor Server relies on a persistent SignalR connection. Shields may classify WebSocket traffic as a tracker and block it, causing the app to load static HTML but fail to become interactive (buttons unresponsive, forms not submitting).
+  - **Cookie-based authentication:** The app uses ASP.NET Identity cookie authentication. Brave's "Aggressive" Shields mode can block first-party cookies, causing login failures or repeated redirects to the login page.
+  - **Antiforgery tokens:** Login and logout forms use antiforgery tokens backed by cookies. If Brave blocks the antiforgery cookie, POST requests to `/account/login` and `/account/logout` will return 400 Bad Request.
+  - **Workaround:** Click the Shields icon (lion) in the address bar and toggle Shields off for the application's domain, or add the domain to Brave's Shields exception list. No application-side fix is possible — these are intentional browser-level privacy controls.
 
 ## Responsive Design Breakpoints
 
