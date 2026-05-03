@@ -88,7 +88,8 @@
         <MudTextField @bind-Value="_formDisplayName" Label="Display Name" Required="true"
                       Variant="Variant.Outlined" Class="mb-3" />
         <MudTextField @bind-Value="_formEmail" Label="Email" Required="true"
-                      Variant="Variant.Outlined" InputType="InputType.Email" Class="mb-3" />
+                      Variant="Variant.Outlined" InputType="InputType.Email" Class="mb-3"
+                      Autocomplete="off" />
         <MudSelect T="string" @bind-Value="_formRole" Label="Role" Variant="Variant.Outlined" Class="mb-3">
             <MudSelectItem T="string" Value="@("Admin")">Admin</MudSelectItem>
             <MudSelectItem T="string" Value="@("ClinicManager")">Clinic Manager</MudSelectItem>
@@ -97,9 +98,11 @@
             <MudSelectItem T="string" Value="@("Patient")">Patient</MudSelectItem>
         </MudSelect>
         <MudTextField @bind-Value="_formPassword" Label="Password" Required="true"
-                      Variant="Variant.Outlined" InputType="InputType.Password" Class="mb-3" />
+                      Variant="Variant.Outlined" InputType="InputType.Password" Class="mb-3"
+                      Autocomplete="new-password" />
         <MudTextField @bind-Value="_formConfirmPassword" Label="Confirm Password" Required="true"
-                      Variant="Variant.Outlined" InputType="InputType.Password" />
+                      Variant="Variant.Outlined" InputType="InputType.Password"
+                      Autocomplete="new-password" />
     </DialogContent>
     <DialogActions>
         <MudButton OnClick="@(() => _createDialogOpen = false)">Cancel</MudButton>
