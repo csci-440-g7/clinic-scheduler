@@ -430,7 +430,8 @@
         else if (user.IsInRole("Patient"))
         {
             _allTherapists = (await TherapistRepo.GetAllAsync())
-                .Where(t => !string.IsNullOrWhiteSpace(t.Specialty))
+                .Where(t => !string.IsNullOrWhiteSpace(t.Specialty)
+                    && !t.Specialty.Contains("admin", StringComparison.OrdinalIgnoreCase))
                 .ToList();
             await LoadPatientDashboardAsync(user.Identity?.Name ?? "");
         }
