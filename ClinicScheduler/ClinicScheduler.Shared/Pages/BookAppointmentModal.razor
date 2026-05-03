@@ -54,7 +54,7 @@
             </label>
             <label class="book-label">
                 Date <span class="book-req">*</span>
-                <input class="book-input" type="date" @bind="_date" />
+                <input class="book-input" type="date" @bind="_date" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
             </label>
             <div class="book-time-row">
                 <label class="book-label">
@@ -107,6 +107,12 @@
         if (_roomId == 0)      { _error = "Please select a room.";       return; }
 
         var startDateTime = DateTime.SpecifyKind(_date.Date + _startTime.ToTimeSpan(), DateTimeKind.Utc);
+
+        if (startDateTime < DateTime.UtcNow)
+        {
+            _error = "Cannot book appointments in the past.";
+            return;
+        }
         var duration = TimeSpan.FromMinutes(30);
 
         try

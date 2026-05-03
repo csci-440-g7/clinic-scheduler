@@ -337,6 +337,12 @@
         _selectedSlotStart = day.Date.AddHours(hour).AddMinutes(minute);
         _errorMessage      = null;
         _newTherapyTypeId  = null;
+
+        if (_selectedSlotStart < DateTime.UtcNow)
+        {
+            _errorMessage = "Cannot book appointments in the past.";
+        }
+
         _createDialogOpen  = true;
     }
 

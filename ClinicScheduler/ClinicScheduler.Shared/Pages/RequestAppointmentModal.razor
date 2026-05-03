@@ -32,7 +32,7 @@
             </label>
             <label class="raq-label">
                 Preferred date <span class="raq-req">*</span>
-                <input class="raq-input" type="date" @bind="_date" />
+                <input class="raq-input" type="date" @bind="_date" min="@DateTime.Today.ToString("yyyy-MM-dd")" />
             </label>
             <label class="raq-label">
                 Preferred time <span class="raq-req">*</span>
@@ -84,6 +84,12 @@
         if (string.IsNullOrWhiteSpace(_reason))
         {
             _error = "Please provide a reason for your visit.";
+            return;
+        }
+
+        if (_date.Date < DateTime.Today)
+        {
+            _error = "Please select a date that is today or later.";
             return;
         }
 
