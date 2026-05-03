@@ -360,6 +360,7 @@
         }
         catch (InvalidOperationException ex) { _errorMessage = ex.Message; }
         catch (ArgumentException ex)         { _errorMessage = ex.Message; }
+        catch (Exception ex)                 { _errorMessage = $"Unexpected error: {ex.Message}"; }
     }
 
     private async Task CompleteAppointmentAsync(Appointment appt)
