@@ -242,6 +242,7 @@
             _showMissedConfirm = false;
             Snackbar.Add($"Marked as missed. {rescheduleMsg}", Severity.Warning);
             await OnStatusChanged.InvokeAsync();
+            await OnClose.InvokeAsync();
         }
         catch (Exception ex)
         {
