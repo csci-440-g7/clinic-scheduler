@@ -272,7 +272,10 @@
         _allTherapyTypes = (await TherapyTypeRepo.GetAllAsync()).ToList();
         _allRooms        = (await RoomRepo.GetAllAsync()).ToList();
 
-        var allTherapists = (await TherapistRepo.GetAllAsync()).ToList();
+        var allTherapists = (await TherapistRepo.GetAllAsync())
+            .Where(t => !string.IsNullOrWhiteSpace(t.Specialty)
+                && !t.Specialty.Contains("admin", StringComparison.OrdinalIgnoreCase))
+            .ToList();
         if (isTherapist)
         {
             // Therapists only see themselves in the booking dialog
