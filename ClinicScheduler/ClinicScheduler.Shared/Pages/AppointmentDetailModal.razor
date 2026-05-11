@@ -153,6 +153,9 @@
     private bool _missedLoading;
     private string? _missedError;
 
+    // Serializes mark-as-missed operations to prevent concurrent DbContext access
+    private static readonly SemaphoreSlim _missedSemaphore = new(1, 1);
+
     protected override async Task OnParametersSetAsync()
     {
         _editNotes = Appointment.Notes ?? "";
@@ -191,6 +194,8 @@
         _missedError = null;
         _missedLoading = true;
 
+        // Serialize to prevent concurrent DbContext access on the same circuit
+        await _missedSemaphore.WaitAsync();
         try
         {
             await using var db = await DbFactory.CreateDbContextAsync();
@@ -251,6 +256,7 @@
         finally
         {
             _missedLoading = false;
+            _missedSemaphore.Release();
         }
     }
 
