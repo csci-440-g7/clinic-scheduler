@@ -172,7 +172,13 @@
     {
         try
         {
-            await LocationRepo.DeleteAsync(loc);
+            var tracked = await LocationRepo.GetByIdAsync(loc.Id);
+            if (tracked is null)
+            {
+                Snackbar.Add("Location not found.", Severity.Warning);
+                return;
+            }
+            await LocationRepo.DeleteAsync(tracked);
             Snackbar.Add("Location deleted.", Severity.Info);
             await LoadAsync();
         }

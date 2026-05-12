@@ -187,7 +187,13 @@
     {
         try
         {
-            await TherapistRepo.DeleteAsync(t);
+            var tracked = await TherapistRepo.GetByIdAsync(t.Id);
+            if (tracked is null)
+            {
+                Snackbar.Add("Therapist not found.", Severity.Warning);
+                return;
+            }
+            await TherapistRepo.DeleteAsync(tracked);
             Snackbar.Add("Therapist deleted.", Severity.Info);
             await LoadAsync();
         }

@@ -177,7 +177,14 @@
     {
         try
         {
-            await RoomRepo.DeleteAsync(r);
+            // Re-fetch as tracked entity since GetAllAsync uses AsNoTracking
+            var tracked = await RoomRepo.GetByIdAsync(r.Id);
+            if (tracked is null)
+            {
+                Snackbar.Add("Room not found.", Severity.Warning);
+                return;
+            }
+            await RoomRepo.DeleteAsync(tracked);
             Snackbar.Add("Room deleted.", Severity.Info);
             await LoadAsync();
         }

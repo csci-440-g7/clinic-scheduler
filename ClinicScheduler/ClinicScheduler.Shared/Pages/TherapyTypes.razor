@@ -157,7 +157,13 @@
     {
         try
         {
-            await TherapyTypeRepo.DeleteAsync(t);
+            var tracked = await TherapyTypeRepo.GetByIdAsync(t.Id);
+            if (tracked is null)
+            {
+                Snackbar.Add("Therapy type not found.", Severity.Warning);
+                return;
+            }
+            await TherapyTypeRepo.DeleteAsync(tracked);
             Snackbar.Add("Therapy type deleted.", Severity.Info);
             await LoadAsync();
         }
