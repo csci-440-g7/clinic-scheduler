@@ -35,6 +35,18 @@ public sealed class TherapistDto
     /// <example>555-123-4567</example>
     /// <example>+1-555-123-4567</example>
     public string? Phone { get; init; }
+
+    /// <summary>
+    /// The therapist's clinical specialty.
+    /// </summary>
+    /// <example>Physical Therapy</example>
+    public string? Specialty { get; init; }
+
+    /// <summary>
+    /// The therapist's National Provider Identifier (10-digit).
+    /// </summary>
+    /// <example>1234567890</example>
+    public string? NpiNumber { get; init; }
     
     /// <summary>
     /// The timestamp when the therapist record was created.

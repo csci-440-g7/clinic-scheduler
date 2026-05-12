@@ -1,6 +1,7 @@
 @page "/locations"
 @attribute [Authorize(Roles = "Admin,ClinicManager")]
 @inject IRepository<Location> LocationRepo
+@inject IRepository<Room> RoomRepo
 @inject ISnackbar Snackbar
 
 <PageTitle>Locations</PageTitle>
@@ -147,9 +148,11 @@
         {
             if (_isEdit && _editTarget is not null)
             {
-                _editTarget.UpdateDetails(_formName, _formAddress, _formCity, _formState, _formZipCode, _formTimeZone);
-                _editTarget.SetDailyCapacity(_formDailyCapacity);
-                await LocationRepo.UpdateAsync(_editTarget);
+                var tracked = await LocationRepo.GetByIdAsync(_editTarget.Id)
+                    ?? throw new InvalidOperationException("Location not found.");
+                tracked.UpdateDetails(_formName, _formAddress, _formCity, _formState, _formZipCode, _formTimeZone);
+                tracked.SetDailyCapacity(_formDailyCapacity);
+                await LocationRepo.UpdateAsync(tracked);
             }
             else
             {
@@ -172,6 +175,14 @@
     {
         try
         {
+            // Guard: prevent cascade-deleting rooms (and their appointments)
+            var rooms = await RoomRepo.FindAsync(r => r.LocationId == loc.Id);
+            if (rooms.Count > 0)
+            {
+                Snackbar.Add($"Cannot delete — this location has {rooms.Count} room(s). Remove them first.", Severity.Error);
+                return;
+            }
+
             var tracked = await LocationRepo.GetByIdAsync(loc.Id);
             if (tracked is null)
             {

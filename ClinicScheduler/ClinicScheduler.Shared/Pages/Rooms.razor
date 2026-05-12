@@ -2,6 +2,7 @@
 @attribute [Authorize(Roles = "Admin,ClinicManager")]
 @inject IRepository<Room> RoomRepo
 @inject IRepository<Location> LocationRepo
+@inject IRepository<Appointment> AppointmentRepo
 @inject ISnackbar Snackbar
 
 <PageTitle>Rooms</PageTitle>
@@ -151,8 +152,10 @@
         {
             if (_isEdit && _editTarget is not null)
             {
-                _editTarget.UpdateDetails(_formName, _formCapacity, _formDescription);
-                await RoomRepo.UpdateAsync(_editTarget);
+                var tracked = await RoomRepo.GetByIdAsync(_editTarget.Id)
+                    ?? throw new InvalidOperationException("Room not found.");
+                tracked.UpdateDetails(_formName, _formCapacity, _formDescription);
+                await RoomRepo.UpdateAsync(tracked);
             }
             else
             {
@@ -177,7 +180,15 @@
     {
         try
         {
-            // Re-fetch as tracked entity since GetAllAsync uses AsNoTracking
+            // Guard: prevent cascade-deleting appointments
+            var activeAppts = await AppointmentRepo.FindAsync(a =>
+                a.RoomId == r.Id && a.Status != AppointmentStatus.Canceled);
+            if (activeAppts.Count > 0)
+            {
+                Snackbar.Add($"Cannot delete — this room has {activeAppts.Count} active appointment(s).", Severity.Error);
+                return;
+            }
+
             var tracked = await RoomRepo.GetByIdAsync(r.Id);
             if (tracked is null)
             {

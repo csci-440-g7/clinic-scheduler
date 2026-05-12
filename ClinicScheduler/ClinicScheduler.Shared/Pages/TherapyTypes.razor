@@ -1,6 +1,7 @@
 @page "/therapy-types"
 @attribute [Authorize(Roles = "Admin,ClinicManager")]
 @inject IRepository<TherapyType> TherapyTypeRepo
+@inject IRepository<Appointment> AppointmentRepo
 @inject ISnackbar Snackbar
 
 <PageTitle>Therapy Types</PageTitle>
@@ -135,8 +136,10 @@
         {
             if (_isEdit && _editTarget is not null)
             {
-                _editTarget.UpdateDetails(_formName, _formDescription, _formSpecialty, _formColorCode);
-                await TherapyTypeRepo.UpdateAsync(_editTarget);
+                var tracked = await TherapyTypeRepo.GetByIdAsync(_editTarget.Id)
+                    ?? throw new InvalidOperationException("Therapy type not found.");
+                tracked.UpdateDetails(_formName, _formDescription, _formSpecialty, _formColorCode);
+                await TherapyTypeRepo.UpdateAsync(tracked);
             }
             else
             {
@@ -157,6 +160,15 @@
     {
         try
         {
+            // Guard: prevent deleting therapy types in use by appointments
+            var inUse = await AppointmentRepo.FindAsync(a =>
+                a.TherapyTypeId == t.Id && a.Status != AppointmentStatus.Canceled);
+            if (inUse.Count > 0)
+            {
+                Snackbar.Add($"Cannot delete — this therapy type is used by {inUse.Count} active appointment(s).", Severity.Error);
+                return;
+            }
+
             var tracked = await TherapyTypeRepo.GetByIdAsync(t.Id);
             if (tracked is null)
             {

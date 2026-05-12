@@ -343,7 +343,8 @@
 
         if (_selectedSlotStart < DateTime.UtcNow)
         {
-            _errorMessage = "Cannot book appointments in the past.";
+            Snackbar.Add("Cannot book appointments in the past.", Severity.Warning);
+            return;
         }
 
         _createDialogOpen  = true;
@@ -438,7 +439,6 @@
             try
             {
                 rescheduled = await SchedulingService.RescheduleAfterMissedAsync(tracked);
-                await DbContext.SaveChangesAsync();
                 rescheduleMsg = $"Rescheduled to {rescheduled.StartTime.ToLocalTime():ddd, MMM d h:mm tt}.";
             }
             catch (InvalidOperationException)

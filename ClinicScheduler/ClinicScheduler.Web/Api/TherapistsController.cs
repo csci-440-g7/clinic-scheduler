@@ -82,6 +82,8 @@ public class TherapistsController : ControllerBase
         LastName = therapist.LastName,
         Email = therapist.Email,
         Phone = therapist.Phone,
+        Specialty = therapist.Specialty,
+        NpiNumber = therapist.NpiNumber,
         CreatedAt = therapist.CreatedAt,
         UpdatedAt = therapist.UpdatedAt
     };
