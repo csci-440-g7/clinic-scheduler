@@ -9,12 +9,17 @@
   </PropertyGroup>
 
     <ItemGroup>
+        <PackageReference Include="AspNetCore.HealthChecks.NpgSql" Version="9.0.0" />
         <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="10.0.3" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.0">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
         <PackageReference Include="MudBlazor" Version="9.0.0-preview.2" />
+        <PackageReference Include="Serilog.AspNetCore" Version="9.0.0" />
+        <PackageReference Include="Serilog.Enrichers.Environment" Version="3.0.1" />
+        <PackageReference Include="Serilog.Enrichers.Thread" Version="4.0.0" />
+        <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="10.1.4" />
         <ProjectReference Include="..\ClinicScheduler.Core\ClinicScheduler.Core.csproj" />
         <ProjectReference Include="..\ClinicScheduler.Infrastructure\ClinicScheduler.Infrastructure.csproj" />

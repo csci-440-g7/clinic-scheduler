@@ -51,9 +51,7 @@ public class RoomsController : ControllerBase
         var location = await _locationRepository.GetByIdAsync(locationId, ct);
         if (location is null) return NotFound("Location not found.");
 
-        var rooms = (await _roomRepository.GetAllAsync(ct))
-            .Where(r => r.LocationId == locationId)
-            .ToList();
+        var rooms = await _roomRepository.FindAsync(r => r.LocationId == locationId, ct);
 
         return Ok(rooms.Select(room => MapToDto(room, location.Name)).ToList());
     }

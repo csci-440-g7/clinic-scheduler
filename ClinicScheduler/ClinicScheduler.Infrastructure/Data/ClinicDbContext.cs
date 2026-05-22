@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.Extensions.Logging;
 
 namespace ClinicScheduler.Infrastructure.Data;
 
@@ -13,7 +14,13 @@ namespace ClinicScheduler.Infrastructure.Data;
 /// </summary>
 public class ClinicDbContext : IdentityDbContext<AppUser>
 {
-    public ClinicDbContext(DbContextOptions<ClinicDbContext> options) : base(options) { }
+    private readonly ILogger<ClinicDbContext>? _logger;
+
+    public ClinicDbContext(DbContextOptions<ClinicDbContext> options, ILogger<ClinicDbContext>? logger = null)
+        : base(options)
+    {
+        _logger = logger;
+    }
 
     public DbSet<Patient> Patients => Set<Patient>();
     public DbSet<Therapist> Therapists => Set<Therapist>();
@@ -71,6 +78,48 @@ public class ClinicDbContext : IdentityDbContext<AppUser>
             .WithOne(sc => sc.Appointment)
             .HasForeignKey(sc => sc.AppointmentId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        // Indexes for common query patterns — FK columns and time-range filters
+        modelBuilder.Entity<Appointment>()
+            .HasIndex(a => a.PatientId)
+            .HasDatabaseName("IX_Appointments_PatientId");
+
+        modelBuilder.Entity<Appointment>()
+            .HasIndex(a => a.TherapistId)
+            .HasDatabaseName("IX_Appointments_TherapistId");
+
+        modelBuilder.Entity<Appointment>()
+            .HasIndex(a => a.RoomId)
+            .HasDatabaseName("IX_Appointments_RoomId");
+
+        modelBuilder.Entity<Appointment>()
+            .HasIndex(a => new { a.StartTime, a.EndTime })
+            .HasDatabaseName("IX_Appointments_StartTime_EndTime");
+
+        modelBuilder.Entity<Appointment>()
+            .HasIndex(a => a.Status)
+            .HasDatabaseName("IX_Appointments_Status");
+
+        modelBuilder.Entity<Notification>()
+            .HasIndex(n => n.UserId)
+            .HasDatabaseName("IX_Notifications_UserId");
+
+        modelBuilder.Entity<Notification>()
+            .HasIndex(n => n.RelatedAppointmentId)
+            .HasFilter("\"RelatedAppointmentId\" IS NOT NULL")
+            .HasDatabaseName("IX_Notifications_RelatedAppointmentId");
+
+        modelBuilder.Entity<Room>()
+            .HasIndex(r => r.LocationId)
+            .HasDatabaseName("IX_Rooms_LocationId");
+
+        modelBuilder.Entity<TreatmentPlan>()
+            .HasIndex(tp => tp.PatientId)
+            .HasDatabaseName("IX_TreatmentPlans_PatientId");
+
+        modelBuilder.Entity<TreatmentPlan>()
+            .HasIndex(tp => tp.TherapistId)
+            .HasDatabaseName("IX_TreatmentPlans_TherapistId");
     }
     
     /// <summary>
@@ -91,9 +140,10 @@ public class ClinicDbContext : IdentityDbContext<AppUser>
         {
             CreateAuditLogEntries();
         }
-        catch
+        catch (Exception ex)
         {
             // Audit logging is best-effort; failures must not block the primary save.
+            _logger?.LogWarning(ex, "Audit log creation failed and was skipped");
         }
 
         return await base.SaveChangesAsync(cancellationToken);

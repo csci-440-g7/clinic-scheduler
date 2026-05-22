@@ -12,219 +12,289 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.OpenApi;
 using MudBlazor.Services;
+using Serilog;
+using Serilog.Events;
+using Serilog.Formatting.Compact;
 
-var builder = WebApplication.CreateBuilder(args);
+// Bootstrap logger captures startup failures before full Serilog is wired up
+Log.Logger = new LoggerConfiguration()
+    .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+    .Enrich.FromLogContext()
+    .WriteTo.Console()
+    .CreateBootstrapLogger();
 
-// Register the Database Context
-var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrWhiteSpace(defaultConnectionString) && !builder.Environment.IsEnvironment("Testing"))
+try
 {
-    throw new InvalidOperationException(
-        "The connection string 'DefaultConnection' is missing or empty. Please configure a valid connection string in appsettings.json or environment configuration.");
-}
+    Log.Information("Starting Clinic Scheduler");
 
-builder.Services.AddDbContextFactory<ClinicDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
-// Also register ClinicDbContext directly (scoped) for controllers and services that need it
-builder.Services.AddDbContext<ClinicDbContext>(options =>
-    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    var builder = WebApplication.CreateBuilder(args);
 
-// Register the repositories
-builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+    // Serilog: read full config from appsettings then replace the bootstrap logger
+    builder.Host.UseSerilog((ctx, services, cfg) => cfg
+        .ReadFrom.Configuration(ctx.Configuration)
+        .ReadFrom.Services(services)
+        .Enrich.FromLogContext()
+        .Enrich.WithMachineName()
+        .Enrich.WithThreadId()
+        .WriteTo.Console(
+            ctx.HostingEnvironment.IsProduction()
+                ? new CompactJsonFormatter()
+                : null)
+        .WriteTo.File(
+            new CompactJsonFormatter(),
+            path: "logs/clinic-.log",
+            rollingInterval: RollingInterval.Day,
+            retainedFileCountLimit: 14,
+            fileSizeLimitBytes: 50_000_000,
+            rollOnFileSizeLimit: true));
 
-// Register business logic services
-builder.Services.AddScoped<AppointmentSchedulingService>();
-builder.Services.AddScoped<MissedAppointmentService>();
-builder.Services.AddScoped<AppointmentNotificationService>();
-
-// Background services
-builder.Services.AddHostedService<AppointmentReminderService>();
-
-// ASP.NET Core Identity
-builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
-{
-    // Baseline: all environments
-    options.Password.RequireDigit = true;
-    options.Password.RequiredLength = 8;
-    options.Password.RequireNonAlphanumeric = true;
-    options.Password.RequireUppercase = true;
-
-    // Elevated: production only
-    if (builder.Environment.IsProduction())
+    // Register the Database Context
+    var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+    if (string.IsNullOrWhiteSpace(defaultConnectionString) && !builder.Environment.IsEnvironment("Testing"))
     {
-        options.Password.RequiredLength = 10;
+        throw new InvalidOperationException(
+            "The connection string 'DefaultConnection' is missing or empty. Please configure a valid connection string in appsettings.json or environment configuration.");
     }
 
-    options.SignIn.RequireConfirmedAccount = false;
-})
-.AddEntityFrameworkStores<ClinicDbContext>()
-.AddDefaultTokenProviders();
+    builder.Services.AddDbContextFactory<ClinicDbContext>(options =>
+        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
+    // Also register ClinicDbContext directly (scoped) for controllers and services that need it
+    builder.Services.AddDbContext<ClinicDbContext>(options =>
+        options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
 
-builder.Services.ConfigureApplicationCookie(options =>
-{
-    options.LoginPath = "/login";
-    options.AccessDeniedPath = "/login";
-    options.ExpireTimeSpan = TimeSpan.FromHours(8);
-    options.SlidingExpiration = true;
-});
+    // Register the repositories
+    builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
 
-builder.Services.AddAuthorization();
+    // Register business logic services
+    builder.Services.AddScoped<AppointmentSchedulingService>();
+    builder.Services.AddScoped<MissedAppointmentService>();
+    builder.Services.AddScoped<AppointmentNotificationService>();
 
-builder.Services.AddCascadingAuthenticationState();
+    // Background services
+    builder.Services.AddHostedService<AppointmentReminderService>();
 
-// CORS — allow same-origin in production; configure AllowedOrigins in appsettings for external clients
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AppPolicy", policy =>
+    // Health check endpoint — used by load balancers and monitoring tools
+    builder.Services.AddHealthChecks()
+        .AddNpgSql(
+            builder.Configuration.GetConnectionString("DefaultConnection") ?? string.Empty,
+            name: "postgres",
+            tags: ["db", "ready"]);
+
+    // ASP.NET Core Identity
+    builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
     {
-        if (builder.Environment.IsDevelopment())
-        {
-            policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
-        }
-        else
-        {
-            var origins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
-            if (origins.Length > 0)
-                policy.WithOrigins(origins).AllowAnyMethod().AllowAnyHeader().AllowCredentials();
-        }
-    });
-});
+        // Baseline: all environments
+        options.Password.RequireDigit = true;
+        options.Password.RequiredLength = 8;
+        options.Password.RequireNonAlphanumeric = true;
+        options.Password.RequireUppercase = true;
 
-// Add API Controllers
-builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
-    });
-
-builder.Services.AddOpenApi(options =>
-{
-    options.AddSchemaTransformer((schema, context, CancellationToken) =>
-    {
-        if (context.JsonTypeInfo.Type.IsEnum)
+        // Elevated: production only
+        if (builder.Environment.IsProduction())
         {
-            schema.Type = JsonSchemaType.String;
-            schema.Enum = context.JsonTypeInfo.Type
-                .GetEnumNames()
-                .Select(name => JsonValue.Create(name))
-                .Cast<JsonNode>()
-                .ToArray();
+            options.Password.RequiredLength = 10;
         }
 
-        return Task.CompletedTask;
-    });
-    options.AddDocumentTransformer((document, AppContext, CancellationToken) =>
+        options.SignIn.RequireConfirmedAccount = false;
+    })
+    .AddEntityFrameworkStores<ClinicDbContext>()
+    .AddDefaultTokenProviders();
+
+    builder.Services.ConfigureApplicationCookie(options =>
     {
-        document.Info = new OpenApiInfo
+        options.LoginPath = "/login";
+        options.AccessDeniedPath = "/login";
+        options.ExpireTimeSpan = TimeSpan.FromHours(8);
+        options.SlidingExpiration = true;
+    });
+
+    builder.Services.AddAuthorization();
+
+    builder.Services.AddCascadingAuthenticationState();
+
+    // CORS — allow same-origin in production; configure AllowedOrigins in appsettings for external clients
+    builder.Services.AddCors(options =>
+    {
+        options.AddPolicy("AppPolicy", policy =>
         {
-            Title = "Clinic Scheduler API",
-            Version = "v1"
+            if (builder.Environment.IsDevelopment())
+            {
+                policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader();
+            }
+            else
+            {
+                var origins = builder.Configuration.GetSection("AllowedOrigins").Get<string[]>() ?? [];
+                if (origins.Length > 0)
+                    policy.WithOrigins(origins).AllowAnyMethod().AllowAnyHeader().AllowCredentials();
+            }
+        });
+    });
+
+    // Add API Controllers
+    builder.Services.AddControllers()
+        .AddJsonOptions(options =>
+        {
+            options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
+        });
+
+    builder.Services.AddOpenApi(options =>
+    {
+        options.AddSchemaTransformer((schema, context, CancellationToken) =>
+        {
+            if (context.JsonTypeInfo.Type.IsEnum)
+            {
+                schema.Type = JsonSchemaType.String;
+                schema.Enum = context.JsonTypeInfo.Type
+                    .GetEnumNames()
+                    .Select(name => JsonValue.Create(name))
+                    .Cast<JsonNode>()
+                    .ToArray();
+            }
+
+            return Task.CompletedTask;
+        });
+        options.AddDocumentTransformer((document, AppContext, CancellationToken) =>
+        {
+            document.Info = new OpenApiInfo
+            {
+                Title = "Clinic Scheduler API",
+                Version = "v1"
+            };
+
+            return Task.CompletedTask;
+        });
+    });
+
+    // Add services to the container.
+    builder.Services.AddRazorComponents()
+        .AddInteractiveServerComponents()
+        .AddInteractiveWebAssemblyComponents();
+
+    // Add device-specific services used by the ClinicScheduler.Shared project
+    builder.Services.AddSingleton<IFormFactor, FormFactor>();
+
+    builder.Services.AddMudServices();
+    var app = builder.Build();
+
+    // Structured HTTP request logging — replaces the default ASP.NET access log
+    app.UseSerilogRequestLogging(opts =>
+    {
+        opts.MessageTemplate =
+            "HTTP {RequestMethod} {RequestPath} responded {StatusCode} in {Elapsed:0.0000}ms";
+        opts.GetLevel = (ctx, elapsed, ex) =>
+        {
+            if (ex is not null || ctx.Response.StatusCode >= 500) return LogEventLevel.Error;
+            if (ctx.Response.StatusCode >= 400) return LogEventLevel.Warning;
+            return LogEventLevel.Information;
         };
-        
-        return Task.CompletedTask;
+        opts.EnrichDiagnosticContext = (diag, http) =>
+        {
+            diag.Set("RequestHost", http.Request.Host.Value);
+            diag.Set("UserName", http.User.Identity?.Name ?? "anonymous");
+        };
     });
-});
 
-// Add services to the container.
-builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents()
-    .AddInteractiveWebAssemblyComponents();
-
-// Add device-specific services used by the ClinicScheduler.Shared project
-builder.Services.AddSingleton<IFormFactor, FormFactor>();
-
-builder.Services.AddMudServices();
-var app = builder.Build();
-
-// Auto-apply EF migrations on startup (safe to run repeatedly; no-ops when up-to-date)
-// In development, handle database errors gracefully to allow testing without a database
-if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
-{
-    using (var scope = app.Services.CreateScope())
+    // Auto-apply EF migrations on startup (safe to run repeatedly; no-ops when up-to-date)
+    // In development, handle database errors gracefully to allow testing without a database
+    if (app.Environment.IsDevelopment() || app.Environment.IsEnvironment("Testing"))
     {
-        var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
-        try
+        using (var scope = app.Services.CreateScope())
         {
-            db.Database.Migrate();
-        }
-        catch (Exception ex)
-        {
-            app.Logger.LogWarning(ex, "Database migration skipped: {Message}", ex.Message);
-        }
+            var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
+            try
+            {
+                db.Database.Migrate();
+            }
+            catch (Exception ex)
+            {
+                app.Logger.LogWarning(ex, "Database migration skipped: {Message}", ex.Message);
+            }
 
-        try
+            try
+            {
+                var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
+                var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
+                var adminPassword = app.Configuration["SeedAdmin:Password"]
+                    ?? throw new InvalidOperationException("SeedAdmin:Password is not configured.");
+                await DatabaseSeeder.SeedAsync(db, userManager, roleManager, adminPassword, isDevelopment: true);
+            }
+            catch (Exception ex)
+            {
+                app.Logger.LogWarning(ex, "Database seed skipped: {Message}", ex.Message);
+            }
+        }
+    }
+    else
+    {
+        using (var scope = app.Services.CreateScope())
         {
+            var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
             var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
             var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
             var adminPassword = app.Configuration["SeedAdmin:Password"]
-                ?? throw new InvalidOperationException("SeedAdmin:Password is not configured.");
-            await DatabaseSeeder.SeedAsync(db, userManager, roleManager, adminPassword, isDevelopment: true);
+                ?? throw new InvalidOperationException(
+                    "SeedAdmin:Password must be set via environment variable (SeedAdmin__Password) in production.");
+            db.Database.Migrate();
+            await DatabaseSeeder.SeedAsync(db, userManager, roleManager, adminPassword, isDevelopment: false);
         }
-        catch (Exception ex)
+    }
+
+    // Configure the HTTP request pipeline.
+    if (app.Environment.IsDevelopment())
+    {
+        app.UseWebAssemblyDebugging();
+
+        app.MapOpenApi();
+
+        app.UseSwaggerUI(options =>
         {
-            app.Logger.LogWarning(ex, "Database seed skipped: {Message}", ex.Message);
-        }
+            options.SwaggerEndpoint("/openapi/v1.json", "ClinicScheduler API v1");
+            options.RoutePrefix = "swagger";
+        });
     }
-}
-else
-{
-    using (var scope = app.Services.CreateScope())
+    else
     {
-        var db = scope.ServiceProvider.GetRequiredService<ClinicDbContext>();
-        var userManager = scope.ServiceProvider.GetRequiredService<UserManager<AppUser>>();
-        var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-        var adminPassword = app.Configuration["SeedAdmin:Password"]
-            ?? throw new InvalidOperationException(
-                "SeedAdmin:Password must be set via environment variable (SeedAdmin__Password) in production.");
-        db.Database.Migrate();
-        await DatabaseSeeder.SeedAsync(db, userManager, roleManager, adminPassword, isDevelopment: false);
+        app.UseExceptionHandler("/Error", createScopeForErrors: true);
+        // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
+        app.UseHsts();
     }
-}
 
-// Configure the HTTP request pipeline.
-if (app.Environment.IsDevelopment())
+    app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
+
+    // HTTPS termination is handled by the load balancer in production; skip redirect in container
+    if (!app.Environment.IsProduction())
+        app.UseHttpsRedirection();
+
+    app.UseStaticFiles();
+    app.UseBlazorFrameworkFiles();
+    app.UseCors("AppPolicy");
+    app.UseAuthentication();
+    app.UseAuthorization();
+
+    app.UseAntiforgery();
+
+    app.MapStaticAssets().AllowAnonymous();
+
+    // Health check — unauthenticated, safe for load balancer probes
+    app.MapHealthChecks("/health").AllowAnonymous();
+
+    // Map API endpoints
+    app.MapControllers();
+
+    app.MapRazorComponents<App>()
+        .AddInteractiveServerRenderMode()
+        .AddInteractiveWebAssemblyRenderMode()
+        .AddAdditionalAssemblies(
+            typeof(ClinicScheduler.Shared._Imports).Assembly,
+            typeof(ClinicScheduler.Web.Client._Imports).Assembly);
+
+    app.Run();
+}
+catch (Exception ex) when (ex is not HostAbortedException)
 {
-    app.UseWebAssemblyDebugging();
-
-    app.MapOpenApi();
-
-    app.UseSwaggerUI(options =>
-    {
-        options.SwaggerEndpoint("/openapi/v1.json", "ClinicScheduler API v1");
-        options.RoutePrefix = "swagger";
-    });
+    Log.Fatal(ex, "Clinic Scheduler terminated unexpectedly");
 }
-else
+finally
 {
-    app.UseExceptionHandler("/Error", createScopeForErrors: true);
-    // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
-    app.UseHsts();
+    Log.CloseAndFlush();
 }
-
-app.UseStatusCodePagesWithReExecute("/not-found", createScopeForStatusCodePages: true);
-
-// HTTPS termination is handled by the load balancer in production; skip redirect in container
-if (!app.Environment.IsProduction())
-    app.UseHttpsRedirection();
-
-app.UseStaticFiles();
-app.UseBlazorFrameworkFiles();
-app.UseCors("AppPolicy");
-app.UseAuthentication();
-app.UseAuthorization();
-
-app.UseAntiforgery();
-
-app.MapStaticAssets().AllowAnonymous();
-
-// Map API endpoints
-app.MapControllers();
-
-app.MapRazorComponents<App>()
-    .AddInteractiveServerRenderMode()
-    .AddInteractiveWebAssemblyRenderMode()
-    .AddAdditionalAssemblies(
-        typeof(ClinicScheduler.Shared._Imports).Assembly,
-        typeof(ClinicScheduler.Web.Client._Imports).Assembly);
-
-app.Run();
