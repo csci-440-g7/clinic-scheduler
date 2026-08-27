@@ -14,3 +14,8 @@ obj/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Secrets / keys
+*.pem
+*.key
+*.pfx
